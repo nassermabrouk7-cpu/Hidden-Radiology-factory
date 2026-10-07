@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body { font-family: Arial, sans-serif; line-height: 1.25; color: #000000; margin: 20px; }
+  h1 { color: #0a0e1a; font-size: 26pt; text-align: center; margin-bottom: 5px; }
+  h2 { color: #06b6d4; font-size: 18pt; text-align: center; margin-top: 0px; margin-bottom: 20px; }
+  h3 { color: #0a0e1a; font-size: 15pt; border-bottom: 2px solid #06b6d4; padding-bottom: 4px; margin-top: 25px; margin-bottom: 10px; }
+  h4 { color: #06b6d4; font-size: 12pt; margin-top: 15px; margin-bottom: 5px; }
+  p { font-size: 11pt; margin-bottom: 10px; text-align: justify; }
+  ul, ol { margin-top: 5px; margin-bottom: 10px; padding-left: 20px; }
+  li { font-size: 11pt; margin-bottom: 5px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 15px; margin-bottom: 20px; }
+  th { background-color: #0a0e1a; color: #ffffff; font-weight: bold; padding: 10px; text-align: left; border: 1px solid #0a0e1a; font-size: 10.5pt; }
+  td { padding: 8px 10px; border: 1px solid #cccccc; font-size: 10pt; text-align: left; vertical-align: top; }
+  tr:nth-child(even) { background-color: #f8fafc; }
+  .illustration-box { background-color: #f0fdfa; border-left: 4px solid #06b6d4; padding: 10px 15px; margin: 15px 0; font-size: 10pt; color: #0f766e; }
+  .title-page { text-align: center; margin-top: 50px; margin-bottom: 50px; }
+  .disclaimer { font-size: 9pt; color: #64748b; font-style: italic; margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 10px; }
+</style>
+</head>
+<body>
+
+<div class="title-page">
+  <h1>ANA FAHIM | RADIATION SAFETY MASTERY</h1>
+  <h2>Vol. 5: Radiation Physics, Biological Effects, Protection Standards & Operational Safety</h2>
+  <p style="text-align: center; font-weight: bold; color: #0a0e1a;">Hidden Radiology Educational Series</p>
+  <p style="text-align: center; color: #64748b;">Author & Consultant: Nasser Mabrouk | Senior Radiology Specialist</p>
+</div>
+
+<div class="disclaimer">
+  <strong>Clinical Disclaimer:</strong> This handbook is designed exclusively for educational purposes for radiation safety officers (RSOs), radiology technologists, residents, and healthcare personnel. It strictly adheres to international radiation protection standards (ICRP, IAEA, NCRP) but does not replace local national atomic energy regulations or hospital safety policies.
+</div>
+
+<br/>
+
+<h3>TABLE OF CONTENTS</h3>
+<ol>
+  <li><strong>Chapter 1:</strong> Physics of Ionizing Radiation & Quantities/Units</li>
+  <li><strong>Chapter 2:</strong> Radiobiology: Cellular Damage Mechanisms & Deterministic vs. Stochastic Risks</li>
+  <li><strong>Chapter 3:</strong> International Dose Limits, ICRP/IAEA Guidelines & Occupational Safety</li>
+  <li><strong>Chapter 4:</strong> Practical Shielding, Area Monitoring & Personal Dosimetry (TLD/OSL)</li>
+  <li><strong>Chapter 5:</strong> Pediatric & Pregnancy Radiation Safety Protocols</li>
+</ol>
+
+<br/>
+
+<h3>CHAPTER 1: Physics of Ionizing Radiation & Quantities/Units</h3>
+
+<p>Ionizing radiation possesses sufficient energy to detach electrons from atoms or molecules, creating charged ions. Understanding physical quantities and measurement units is fundamental to quantifying dose and assessing risk.</p>
+
+<h4>1.1 Fundamental Radiation Quantities and Units</h4>
+<table>
+  <thead>
+    <tr>
+      <th>Quantity</th>
+      <th>SI Unit</th>
+      <th>Traditional Unit</th>
+      <th>Physical Definition & Clinical Context</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Exposure</strong></td>
+      <td>Coulomb per kilogram (C/kg)</td>
+      <td>Roentgen (R)</td>
+      <td>Measures ionization density produced by X-rays/gamma rays in a volume of air.</td>
+    </tr>
+    <tr>
+      <td><strong>Absorbed Dose ($D$)</strong></td>
+      <td>Gray (Gy) [1 Gy = 1 J/kg]</td>
+      <td>Rad (1 Gy = 100 rad)</td>
+      <td>Energy deposited per unit mass of matter (tissue). $1 \text{ mGy} = 0.001 \text{ Gy}$.</td>
+    </tr>
+    <tr>
+      <td><strong>Equivalent Dose ($H_T$)</strong></td>
+      <td>Sievert (Sv)</td>
+      <td>Rem (1 Sv = 100 rem)</td>
+      <td>Adjusts absorbed dose for the biological effectiveness of specific radiation types ($H_T = D \times w_R$). For diagnostic X-rays, Radiation Weighting Factor ($w_R$) = 1.</td>
+    </tr>
+    <tr>
+      <td><strong>Effective Dose ($E$)</strong></td>
+      <td>Sievert (Sv)</td>
+      <td>Rem</td>
+      <td>Adjusts equivalent dose for variations in biological radiosensitivity across organ systems ($E = \sum H_T \times w_T$). Reflects total body stochastic risk.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="illustration-box">
+  <strong>[Illustration 1.1 Placement & Prompt]</strong><br/>
+  <em>Description: 3D Infographic comparing Absorbed Dose (Gy), Equivalent Dose (Sv), and Effective Dose (Sv) with tissue weighting factors.</em><br/>
+  <strong>AI Prompt:</strong> <code>3D medical physics infographic comparing Absorbed Dose, Equivalent Dose, and Effective Dose in diagnostic radiology, dark navy background, glowing cyan energy levels and cell icons, clear textbook layout, 8k --ar 16:9</code>
+</div>
+
+<br/>
+
+<h3>CHAPTER 2: Radiobiology: Cellular Damage Mechanisms & Biological Risks</h3>
+
+<p>Biological damage results from direct or indirect ionization of cellular targets, primarily intracellular DNA molecules.</p>
+
+<h4>2.1 DNA Damage Mechanisms</h4>
+<ul>
+  <li><strong>Direct Effect:</strong> Radiation photon directly interacts with and ruptures essential cellular macromolecules (DNA strands). Dominant mechanism for high Linear Energy Transfer (LET) particulate radiation.</li>
+  <li><strong>Indirect Effect:</strong> Radiation interacts with intracellular water molecules ($H_2O$), inducing radiolytic cleavage to form free radicals ($\text{OH}^-$, $H^+$). These highly reactive free radicals diffuse to attack DNA strands. Dominant mechanism (~$70\%$) for low-LET radiation like diagnostic X-rays.</li>
+</ul>
+
+<h4>2.2 Deterministic vs. Stochastic Risk Comparison</h4>
+<table>
+  <thead>
+    <tr>
+      <th>Characteristic</th>
+      <th>Deterministic Effects (Tissue Reactions)</th>
+      <th>Stochastic Effects (Probabilistic)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Dose Threshold</strong></td>
+      <td>Yes (Clear threshold dose must be exceeded).</td>
+      <td>No threshold (Linear No-Threshold - LNT model).</td>
+    </tr>
+    <tr>
+      <td><strong>Severity vs. Dose</strong></td>
+      <td>Severity increases directly with higher dose.</td>
+      <td>Severity is independent of dose (all-or-nothing response).</td>
+    </tr>
+    <tr>
+      <td><strong>Probability vs. Dose</strong></td>
+      <td>Zero below threshold; 100% above threshold.</td>
+      <td>Probability increases linearly with higher dose.</td>
+    </tr>
+    <tr>
+      <td><strong>Clinical Examples</strong></td>
+      <td>Skin erythema (&gt;2 Gy), Cataracts (&gt;0.5 Gy), Epilation (&gt;3 Gy).</td>
+      <td>Radiation-induced cancer (leukemia, solid tumors), hereditary mutations.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="illustration-box">
+  <strong>[Illustration 2.1 Placement & Prompt]</strong><br/>
+  <em>Description: Comparative graph showing Linear No-Threshold (LNT) model for stochastic effects vs Threshold model for deterministic tissue reactions.</em><br/>
+  <strong>AI Prompt:</strong> <code>Radiobiology chart comparing the Linear No-Threshold (LNT) model curve for cancer risk against the deterministic threshold curve, dark navy backdrop with cyan and orange data curves, high clarity textbook graphic, 8k --ar 16:9</code>
+</div>
+
+<br/>
+
+<h3>CHAPTER 3: International Dose Limits & Occupational Safety</h3>
+
+<p>The International Commission on Radiological Protection (ICRP) establishes regulatory dose limits to prevent deterministic effects completely and limit stochastic risk to acceptable societal levels.</p>
+
+<h4>3.1 Regulatory Annual Occupational & Public Dose Limits (ICRP 103)</h4>
+<table>
+  <thead>
+    <tr>
+      <th>Target Group / Anatomical Region</th>
+      <th>Occupational Limit (Radiation Workers)</th>
+      <th>Public / Non-Radiation Personnel Limit</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Effective Dose (Whole Body)</strong></td>
+      <td>20 mSv/year (averaged over 5 years; max 50 mSv in any single year)</td>
+      <td>1 mSv/year</td>
+    </tr>
+    <tr>
+      <td><strong>Lens of the Eye</strong></td>
+      <td>20 mSv/year (averaged over 5 years; max 50 mSv in 1 year)</td>
+      <td>15 mSv/year</td>
+    </tr>
+    <tr>
+      <td><strong>Skin (1 cm² area)</strong></td>
+      <td>500 mSv/year</td>
+      <td>50 mSv/year</td>
+    </tr>
+    <tr>
+      <td><strong>Hands, Feet & Extremities</strong></td>
+      <td>500 mSv/year</td>
+      <td>50 mSv/year</td>
+    </tr>
+    <tr>
+      <td><strong>Declared Pregnant Worker (Fetal Limit)</strong></td>
+      <td>1 mSv equivalent dose to abdomen for remainder of pregnancy</td>
+      <td>N/A</td>
+    </tr>
+  </tbody>
+</table>
+
+<br/>
+
+<h3>CHAPTER 4: Practical Shielding, Area Monitoring & Personal Dosimetry</h3>
+
+<h4>4.1 Personal Dosimetry Technology</h4>
+<ul>
+  <li><strong>Thermoluminescent Dosimeter (TLD):</strong> Contains Lithium Fluoride (LiF) crystals. Absorbed energy traps electrons; heating releases light proportional to dose. Reusable but destroys readout data during processing.</li>
+  <li><strong>Optically Stimulated Luminescence (OSL):</strong> Contains Aluminum Oxide ($Al_2O_3$). Stimulated with green laser light to emit blue light proportional to dose. Highly sensitive (down to $0.01\text{ mSv}$) and allows re-analysis.</li>
+  <li><strong>Dosimeter Placement:</strong> Worn at chest/collar level. When wearing a lead apron, the primary dosimeter must be worn <em>under</em> the apron (whole-body dose); an optional second dosimeter is worn <em>outside</em> at collar level (eye/head dose).</li>
+</ul>
+
+<h4>4.2 Shielding & Barrier Design</h4>
+<table>
+  <thead>
+    <tr>
+      <th>Barrier Type</th>
+      <th>Target Radiation Source</th>
+      <th>Standard Structural Requirement</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Primary Radiation Barrier</strong></td>
+      <td>Direct useful X-ray beam emerging from gantry/collimator.</td>
+      <td>1.5 to 2.0 mm Lead (Pb) equivalent embedded in walls up to a height of 2.1 meters.</td>
+    </tr>
+    <tr>
+      <td><strong>Secondary Radiation Barrier</strong></td>
+      <td>Leakage radiation from tube housing and scatter radiation from patient.</td>
+      <td>0.8 to 1.0 mm Lead (Pb) equivalent (e.g., control booth walls, viewing windows).</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="illustration-box">
+  <strong>[Illustration 4.1 Placement & Prompt]</strong><br/>
+  <em>Description: Cross-section architectural diagram showing primary vs. secondary lead barriers in a diagnostic radiography room with scatter radiation pathways.</em><br/>
+  <strong>AI Prompt:</strong> <code>Architectural cross-section of an X-ray examination room showing Primary and Secondary lead shielding barriers, radiation tube leakage, and patient scatter pathways, dark navy background with cyan structural lines, 8k --ar 16:9</code>
+</div>
+
+<br/>
+
+<h3>CHAPTER 5: Pediatric & Pregnancy Radiation Safety Protocols</h3>
+
+<h4>5.1 Pediatric Radiation Protection ("Image Gently" Campaign)</h4>
+<ul>
+  <li><strong>Increased Radiosensitivity:</strong> Children are 2 to 10 times more sensitive to radiation-induced stochastic risks than adults due to higher cellular proliferation rates and longer remaining lifespan.</li>
+  <li><strong>Technical Protocol Adaptations:</strong>
+    <ul>
+      <li>Remove anti-scatter grid for infants/small children (body thickness &lt;10–12 cm) to reduce dose by 50%+.</li>
+      <li>Utilize anatomical pediatric pre-set protocols (lower kVp and mAs auto-adjusted).</li>
+      <li>Tighten collimation strictly to the region of interest.</li>
+    </ul>
+  </li>
+</ul>
+
+<h4>5.2 Pregnant Patient Radiation Guidelines ("Ten-Day Rule")</h4>
+<table>
+  <thead>
+    <tr>
+      <th>Gestation Period</th>
+      <th>Radiation Sensitivity & Biological Risk</th>
+      <th>Action Threshold / Guidelines</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Pre-Implantation (0–2 weeks)</strong></td>
+      <td>"All-or-Nothing" phenomenon. Embryonic death or intact survival with no anomalies.</td>
+      <td>Dose threshold ~50–100 mGy. Diagnostic exams rarely reach this level.</td>
+    </tr>
+    <tr>
+      <td><strong>Organogenesis (2–8 weeks)</strong></td>
+      <td>High risk of structural congenital malformations, microcephaly, growth retardation.</td>
+      <td>Threshold ~100 mGy. Shield abdomen if procedure is non-pelvic; consider MRI/US alternatives.</td>
+    </tr>
+    <tr>
+      <td><strong>Fetal Period (8–15 weeks)</strong></td>
+      <td>High sensitivity of central nervous system (severe intellectual disability risk).</td>
+      <td>Threshold ~100–300 mGy. IQ drop ~25 points per Gy above threshold.</td>
+    </tr>
+    <tr>
+      <td><strong>Late Fetal Period (&gt;25 weeks)</strong></td>
+      <td>Mainly stochastic risk of childhood cancer (leukemia).</td>
+      <td>Minimize abdominal exposures; perform only for critical, life-threatening maternal indications.</td>
+    </tr>
+  </tbody>
+</table>
+
+<br/>
+
+<div class="title-page">
+  <p style="font-weight: bold; color: #06b6d4;">END OF VOLUME 5</p>
+  <p>Hidden Radiology Project | Ana Fahim Series</p>
+</div>
+
+</body>
+</html>

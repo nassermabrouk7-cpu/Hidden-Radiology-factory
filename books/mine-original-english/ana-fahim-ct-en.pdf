@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body { font-family: Arial, sans-serif; line-height: 1.25; color: #000000; margin: 20px; }
+  h1 { color: #0a0e1a; font-size: 26pt; text-align: center; margin-bottom: 5px; }
+  h2 { color: #06b6d4; font-size: 18pt; text-align: center; margin-top: 0px; margin-bottom: 20px; }
+  h3 { color: #0a0e1a; font-size: 15pt; border-bottom: 2px solid #06b6d4; padding-bottom: 4px; margin-top: 25px; margin-bottom: 10px; }
+  h4 { color: #06b6d4; font-size: 12pt; margin-top: 15px; margin-bottom: 5px; }
+  p { font-size: 11pt; margin-bottom: 10px; text-align: justify; }
+  ul, ol { margin-top: 5px; margin-bottom: 10px; padding-left: 20px; }
+  li { font-size: 11pt; margin-bottom: 5px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 15px; margin-bottom: 20px; }
+  th { background-color: #0a0e1a; color: #ffffff; font-weight: bold; padding: 10px; text-align: left; border: 1px solid #0a0e1a; font-size: 10.5pt; }
+  td { padding: 8px 10px; border: 1px solid #cccccc; font-size: 10pt; text-align: left; vertical-align: top; }
+  tr:nth-child(even) { background-color: #f8fafc; }
+  .illustration-box { background-color: #f0fdfa; border-left: 4px solid #06b6d4; padding: 10px 15px; margin: 15px 0; font-size: 10pt; color: #0f766e; }
+  .title-page { text-align: center; margin-top: 50px; margin-bottom: 50px; }
+  .disclaimer { font-size: 9pt; color: #64748b; font-style: italic; margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 10px; }
+</style>
+</head>
+<body>
+
+<div class="title-page">
+  <h1>ANA FAHIM | CT MASTERY</h1>
+  <h2>Vol. 2: Computed Tomography Physics, Windowing, Contrast Protocols & Emergency Interpretation</h2>
+  <p style="text-align: center; font-weight: bold; color: #0a0e1a;">Hidden Radiology Educational Series</p>
+  <p style="text-align: center; color: #64748b;">Author & Consultant: Nasser Mabrouk | Senior Radiology Specialist</p>
+</div>
+
+<div class="disclaimer">
+  <strong>Clinical Disclaimer:</strong> This handbook is designed exclusively for educational purposes for CT technologists, radiology residents, and healthcare professionals. It does not replace institutional CT acquisition protocols or official clinical diagnostic guidelines.
+</div>
+
+<br/>
+
+<h3>TABLE OF CONTENTS</h3>
+<ol>
+  <li><strong>Chapter 1:</strong> Fundamental Physics, Hounsfield Units & Image Reconstruction</li>
+  <li><strong>Chapter 2:</strong> Windowing Dynamics, Leveling & Display Optimization</li>
+  <li><strong>Chapter 3:</strong> Contrast Media Dynamics, Timing & Injection Protocols</li>
+  <li><strong>Chapter 4:</strong> Acute Brain CT: Stroke, Hemorrhage & Trauma Readout</li>
+  <li><strong>Chapter 5:</strong> Artifact Mitigation, Radiation Dose Optimization & Pre-Flight Checklists</li>
+</ol>
+
+<br/>
+
+<h3>CHAPTER 1: Fundamental Physics, Hounsfield Units & Image Reconstruction</h3>
+
+<p>Computed Tomography relies on X-ray attenuation measurements taken from multiple angles around the patient to reconstruct cross-sectional images. Understanding the physical principles of attenuation and density quantification is essential for accurate tissue characterization.</p>
+
+<h4>1.1 Hounsfield Units (HU) & Attenuation Scale</h4>
+<p>The Hounsfield scale quantitatively measures tissue radiodensity relative to distilled water (0 HU) and air (-1000 HU). Tissue attenuation values dictate windowing setup and pathology identification.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Tissue / Substance</th>
+      <th>Hounsfield Unit (HU) Range</th>
+      <th>Clinical Significance</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Air</strong></td>
+      <td>-1000 HU</td>
+      <td>Lungs, paranasal sinuses, bowel gas, pneumoperitoneum.</td>
+    </tr>
+    <tr>
+      <td><strong>Fat</strong></td>
+      <td>-120 to -90 HU</td>
+      <td>Subcutaneous fat, mesenteric fat stranding in inflammation.</td>
+    </tr>
+    <tr>
+      <td><strong>Water</strong></td>
+      <td>0 HU (Reference)</td>
+      <td>Simple cysts, CSF, simple fluid collections.</td>
+    </tr>
+    <tr>
+      <td><strong>Soft Tissue / Muscles</strong></td>
+      <td>+30 to +60 HU</td>
+      <td>Liver, spleen, muscle, solid abdominal organs.</td>
+    </tr>
+    <tr>
+      <td><strong>Acute Blood (Clot)</strong></td>
+      <td>+50 to +80 HU</td>
+      <td>Hyperdense sign in acute intracranial hemorrhage or vascular thrombosis.</td>
+    </tr>
+    <tr>
+      <td><strong>Intravenous Contrast</strong></td>
+      <td>+150 to +300+ HU</td>
+      <td>Arterial/venous enhancement, active extravasation.</td>
+    </tr>
+    <tr>
+      <td><strong>Cortical Bone</strong></td>
+      <td>+400 to +1000+ HU</td>
+      <td>Skeletal structures, calcifications, metallic hardware.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h4>1.2 Pitch, Slice Thickness & Spatial Resolution</h4>
+<ul>
+  <li><strong>Pitch Factor:</strong> Defined as table movement per 360° gantry rotation divided by total collimation beam width.
+    <ul>
+      <li><em>Pitch = 1.0:</em> Standard image quality and dose balance.</li>
+      <li><em>Pitch &gt; 1.0:</em> Faster scan coverage, reduced dose, minor decrease in spatial resolution (ideal for trauma / uncooperative patients).</li>
+      <li><em>Pitch &lt; 1.0:</em> High spatial resolution, increased radiation dose (cardiac CTA and temporal bone protocols).</li>
+    </ul>
+  </li>
+  <li><strong>Slice Thickness vs. Interval:</strong> Thin acquisition slices (&le;0.625 mm) optimize multiplanar reformations (MPR) and 3D volume rendering, while thicker reconstructed slices (3–5 mm) reduce visual noise for routine soft tissue reading.</li>
+</ul>
+
+<div class="illustration-box">
+  <strong>[Illustration 1.1 Placement & Prompt]</strong><br/>
+  <em>Description: High-contrast 3D graphic showing the CT Hounsfield Unit spectrum scale from -1000 HU (Air) to +1000 HU (Bone), with glowing cyan indicators for acute blood and contrast enhancement.</em><br/>
+  <strong>AI Prompt:</strong> <code>3D medical infographic showing the CT Hounsfield Unit (HU) density scale from -1000 to +1000, dark navy blue background, glowing cyan callout markers for water (0 HU), soft tissue (+40 HU), acute hematoma (+70 HU), and cortical bone (+1000 HU), high clarity radiology textbook graphic, 8k --ar 16:9</code>
+</div>
+
+<br/>
+
+<h3>CHAPTER 2: Windowing Dynamics, Leveling & Display Optimization</h3>
+
+<p>Because the human eye can only perceive around 20 to 30 shades of grey, CT image viewing depends on adjusting <strong>Window Width (WW)</strong> and <strong>Window Level (WL)</strong> to accentuate specific tissue density ranges.</p>
+
+<h4>2.1 Mathematical Basis of Windowing</h4>
+<ul>
+  <li><strong>Window Width (WW):</strong> Controls image contrast range. A wide window displays a broad range of densities (low contrast), whereas a narrow window increases image contrast.</li>
+  <li><strong>Window Level (WL):</strong> Controls image brightness by centering the window display around the average Hounsfield Unit of the target anatomy.</li>
+  <li><em>Upper Display Limit = WL + (WW / 2)</em></li>
+  <li><em>Lower Display Limit = WL - (WW / 2)</em></li>
+</ul>
+
+<h4>2.2 Standard Diagnostic Window Settings</h4>
+<table>
+  <thead>
+    <tr>
+      <th>Anatomical Region / Target</th>
+      <th>Window Width (WW)</th>
+      <th>Window Level (WL)</th>
+      <th>Diagnostic Objective</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Brain Soft Tissue</strong></td>
+      <td>80 HU</td>
+      <td>+40 HU</td>
+      <td>Differentiates grey/white matter junction and subtle ischemic changes.</td>
+    </tr>
+    <tr>
+      <td><strong>Subdural / Epidural Window</strong></td>
+      <td>130 to 200 HU</td>
+      <td>+50 to +70 HU</td>
+      <td>Distinguishes hyperdense extra-axial blood from adjacent skull bone.</td>
+    </tr>
+    <tr>
+      <td><strong>Lung Parenchyma</strong></td>
+      <td>1500 HU</td>
+      <td>-600 HU</td>
+      <td>Evaluates pulmonary nodules, interstitial markings, and air bronchograms.</td>
+    </tr>
+    <tr>
+      <td><strong>Mediastinum / Soft Tissue</strong></td>
+      <td>350 to 400 HU</td>
+      <td>+40 to +50 HU</td>
+      <td>Inspects vascular structures, lymph nodes, and cardiac borders.</td>
+    </tr>
+    <tr>
+      <td><strong>Abdomen / Pelvis</strong></td>
+      <td>350 to 400 HU</td>
+      <td>+40 to +50 HU</td>
+      <td>Delineates solid organs, mesenteric fat stranding, and fluid.</td>
+    </tr>
+    <tr>
+      <td><strong>Bone Window</strong></td>
+      <td>2000 to 2500 HU</td>
+      <td>+500 HU</td>
+      <td>Inspects cortical bone fractures, trabecular destruction, and sinus walls.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="illustration-box">
+  <strong>[Illustration 2.1 Placement & Prompt]</strong><br/>
+  <em>Description: Comparative 4-panel axial head CT diagram demonstrating Brain Window, Subdural Window, Bone Window, and Stroke Window settings on the same anatomical slice.</em><br/>
+  <strong>AI Prompt:</strong> <code>Four-panel CT head image display comparison demonstrating identical slice in Brain Window, Subdural Window, Bone Window, and Stroke Window, dark navy framing, cyan labeling, high detail radiographer reference visual, 8k --ar 16:9</code>
+</div>
+
+<br/>
+
+<h3>CHAPTER 3: Contrast Media Dynamics, Timing & Injection Protocols</h3>
+
+<p>Intravenous iodinated contrast media enhances intravascular structures and parenchymal tissue differential attenuation. Precise timing based on cardiac output and injection rate is critical for diagnostic CTA and multiphasic abdominal CT.</p>
+
+<h4>3.1 Contrast Timing Techniques</h4>
+<ul>
+  <li><strong>Bolus Tracking (Automated Peak Triggering):</strong> A ROI (Region of Interest) locator is placed on a reference vessel (e.g., Abdominal Aorta). Scan acquisition automatically triggers when density reaches a predefined threshold (typically +100 to +150 HU above baseline).</li>
+  <li><strong>Test Bolus Technique:</strong> A small test volume (10–15 mL) is injected while taking low-dose monitoring slices at 1–2 second intervals to calculate exact individual peak contrast arrival time.</li>
+</ul>
+
+<h4>3.2 Multiphasic Abdominal CT Timing</h4>
+<table>
+  <thead>
+    <tr>
+      <th>Phase Name</th>
+      <th>Scan Delay (Post-Injection)</th>
+      <th>Primary Clinical Indications</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Early Arterial Phase</strong></td>
+      <td>15 to 20 seconds</td>
+      <td>Bronchial/thoracic CTA, renal artery mapping.</td>
+    </tr>
+    <tr>
+      <td><strong>Late Arterial (Parenchymal) Phase</strong></td>
+      <td>35 to 45 seconds</td>
+      <td>Hypervascular liver tumors (HCC), pancreatic adenocarcinoma, active arterial bleeding.</td>
+    </tr>
+    <tr>
+      <td><strong>Portal Venous Phase</strong></td>
+      <td>60 to 70 seconds</td>
+      <td>Standard routine abdomen/pelvis, liver parenchyma enhancement, portal vein thrombosis.</td>
+    </tr>
+    <tr>
+      <td><strong>Nephrographic Phase</strong></td>
+      <td>80 to 100 seconds</td>
+      <td>Renal parenchymal mass evaluation and corticomedullary differentiation.</td>
+    </tr>
+    <tr>
+      <td><strong>Delayed / Excretory Phase</strong></td>
+      <td>3 to 15 minutes</td>
+      <td>Urothelial tumors, renal collecting system, scar tissue vs. active leak.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="illustration-box">
+  <strong>[Illustration 3.1 Placement & Prompt]</strong><br/>
+  <em>Description: Multiphasic contrast enhancement timeline diagram illustrating bolus arrival curves for Arterial, Portal Venous, and Delayed phases in CT imaging.</em><br/>
+  <strong>AI Prompt:</strong> <code>Technical medical timeline chart showing IV contrast bolus arrival curves in CT imaging across Arterial, Portal Venous, and Excretory phases, dark navy background, glowing cyan time markers and vessel graphics, 8k --ar 16:9</code>
+</div>
+
+<br/>
+
+<h3>CHAPTER 4: Acute Brain CT: Stroke, Hemorrhage & Trauma Readout</h3>
+
+<p>Non-contrast Head CT (NCCT) is the first-line imaging modality in acute neurological emergencies to rule out intracranial hemorrhage before thrombolytic therapy or surgical intervention.</p>
+
+<h4>4.1 Acute Intracranial Hemorrhage Classification</h4>
+<ul>
+  <li><strong>Epidural Hematoma (EDH):</strong> Biconvex (lenticular) hyperdense collection bounded by cranial sutures. Often associated with skull fractures and middle meningeal artery rupture.</li>
+  <li><strong>Subdural Hematoma (SDH):</strong> Crescentic hyperdense collection crossing suture lines, bounded by dural reflections. Associated with bridging vein rupture.</li>
+  <li><strong>Subarachnoid Hemorrhage (SAH):</strong> Hyperdense attenuation filling the basal cisterns, sulci, and Sylvian fissures. Ruptured berry aneurysm is the primary etiology.</li>
+  <li><strong>Intraparenchymal Hemorrhage (IPH):</strong> Hyperdense clot within the brain parenchyma, accompanied by surrounding hypodense cytotoxic edema and mass effect.</li>
+</ul>
+
+<h4>4.2 Early Ischemic Stroke Signs (The "ASPECTS" Focus)</h4>
+<ul>
+  <li><strong>Hyperdense Middle Cerebral Artery (MCA) Sign:</strong> Acute intravascular thrombus within the M1 segment (+70 to +80 HU).</li>
+  <li><strong>Loss of Insular Ribbon:</strong> Loss of grey-white matter differentiation in the insular cortex due to cytotoxic edema.</li>
+  <li><strong>Obscuration of Lentiform Nucleus:</strong> Hypodensity and loss of sharp borders in the basal ganglia within 3–6 hours of ischemic onset.</li>
+</ul>
+
+<div class="illustration-box">
+  <strong>[Illustration 4.1 Placement & Prompt]</strong><br/>
+  <em>Description: Diagram illustrating the classic CT appearances of Epidural (biconvex), Subdural (crescentic), and Subarachnoid (cisternal hyperdensity) hemorrhages with annotated labels.</em><br/>
+  <strong>AI Prompt:</strong> <code>3D medical diagram illustrating acute CT head trauma patterns: biconvex Epidural Hematoma, crescentic Subdural Hematoma, and hyperdense Subarachnoid Hemorrhage in basal cisterns, dark navy backdrop with glowing cyan callouts, 8k --ar 16:9</code>
+</div>
+
+<br/>
+
+<h3>CHAPTER 5: Artifacts, Radiation Dose Optimization & Pre-Flight Checklists</h3>
+
+<h4>5.1 Common CT Artifacts & Mitigation Strategies</h4>
+<ul>
+  <li><strong>Metal Streak Artifact:</strong> High atomic number metallic objects cause beam hardening and photon starvation streaks. <em>Mitigation:</em> Utilize iterative reconstruction algorithms (e.g., MAR/iMAR) and tilt gantry to avoid direct metal plane.</li>
+  <li><strong>Beam Hardening Artifact:</strong> Polychromatic X-ray beam becomes harder (higher average energy) as lower energy photons are absorbed, producing broad dark bands between dense bones (e.g., posterior fossa).</li>
+  <li><strong>Motion Artifact:</strong> Patient movement during acquisition produces shading and ghosting streaks. <em>Mitigation:</em> Shorten rotation time, utilize prospective gating, and implement fixation devices.</li>
+</ul>
+
+<h4>5.2 Dose Optimization Principles (ALARA & Dose Metrics)</h4>
+<ul>
+  <li><strong>CTDIvol (Volume CT Dose Index):</strong> Measures average radiation dose delivered to a standardized phantom within the scan volume (mGy).</li>
+  <li><strong>DLP (Dose Length Product):</strong> Measures total radiation exposure by integrating CTDIvol over total scan length (mGy·cm). <em>Effective Dose (mSv) = DLP &times; Conversion Factor (k)</em>.</li>
+  <li><strong>Automatic Exposure Control (AEC / Tube Current Modulation):</strong> Dynamically adjusts mA based on patient thickness along the z-axis to maintain uniform image noise while minimizing patient dose.</li>
+</ul>
+
+<h4>5.3 CT Technologist Pre-Scan Verification Checklist</h4>
+<table>
+  <thead>
+    <tr>
+      <th>Verification Step</th>
+      <th>Standard Operating Parameter</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Patient Verification & Lab Status</td>
+      <td>Two patient identifiers, serum Creatinine / eGFR check (&gt;30 mL/min)</td>
+      <td>[  ] Pass</td>
+    </tr>
+    <tr>
+      <td>Allergy & Contrast History</td>
+      <td>Rule out prior anaphylactoid reaction to iodinated contrast media</td>
+      <td>[  ] Pass</td>
+    </tr>
+    <tr>
+      <td>IV Cannula Patency</td>
+      <td>18G to 20G peripheral IV access checked with saline flush for power injection</td>
+      <td>[  ] Pass</td>
+    </tr>
+    <tr>
+      <td>Scan Range & Positioning</td>
+      <td>Laser alignment at anatomical landmark; clear metal objects from scan field</td>
+      <td>[  ] Pass</td>
+    </tr>
+    <tr>
+      <td>Protocol Selection</td>
+      <td>Adjust kVp/mA based on weight/age; verify automatic bolus tracking ROI</td>
+      <td>[  ] Pass</td>
+    </tr>
+    <tr>
+      <td>Post-Scan Dose Review</td>
+      <td>Review CTDIvol and DLP metrics against diagnostic reference levels (DRLs)</td>
+      <td>[  ] Pass</td>
+    </tr>
+  </tbody>
+</table>
+
+<br/>
+
+<div class="title-page">
+  <p style="font-weight: bold; color: #06b6d4;">END OF VOLUME 2</p>
+  <p>Hidden Radiology Project | Ana Fahim Series</p>
+</div>
+
+</body>
+</html>

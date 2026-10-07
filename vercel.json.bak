@@ -1,0 +1,8 @@
+﻿{
+  "crons": [
+    {
+      "path": "/api/publish?secret=hr_secret",
+      "schedule": "0 * * * *"
+    }
+  ]
+}
