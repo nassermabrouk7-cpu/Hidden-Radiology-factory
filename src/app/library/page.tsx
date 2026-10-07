@@ -1,16 +1,10 @@
 ﻿"use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
 import Navbar from "@/components/Navbar";
 import { useLanguage } from "@/context/LanguageContext";
 import { useCart } from "@/context/CartContext";
 import { ShoppingCart, Check } from "lucide-react";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 type Product = {
   id: string;
@@ -25,6 +19,7 @@ type Product = {
 export default function LibraryPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
   const { lang, t } = useLanguage();
   const { addToCart, items } = useCart();
@@ -35,15 +30,18 @@ export default function LibraryPage() {
   useEffect(() => {
     async function fetchProducts() {
       setLoading(true);
-      const { data, error } = await supabase
-        .from("products")
-        .select("id, title_ar, title_en, category, price, cover_url, language")
-        .order("created_at", { ascending: false });
-
-      if (error) console.error("خطأ في جلب المنتجات:", error);
-      else setProducts(data || []);
-      
-      setLoading(false);
+      setLoadError(false);
+      try {
+        const response = await fetch("/api/products", { cache: "no-store" });
+        if (!response.ok) throw new Error("Product catalog request failed");
+        const result: { products?: Product[] } = await response.json();
+        setProducts(Array.isArray(result.products) ? result.products : []);
+      } catch (error) {
+        console.error("خطأ في جلب المنتجات:", error);
+        setLoadError(true);
+      } finally {
+        setLoading(false);
+      }
     }
     fetchProducts();
   }, []);
@@ -84,6 +82,10 @@ export default function LibraryPage() {
       <div className="max-w-7xl mx-auto px-6 pb-20">
         {loading ? (
           <div className="text-center py-20 text-gray-400 text-xl">{t.loading || "جاري التحميل..."}</div>
+        ) : loadError ? (
+          <div className="text-center py-20 text-gray-400 text-xl">
+            {isRTL ? "تعذر تحميل المنتجات. حاول تحديث الصفحة." : "Could not load products. Please refresh the page."}
+          </div>
         ) : filteredProducts.length === 0 ? (
           <div className="text-center py-20 text-gray-400 text-xl">{t.no_products || "لا توجد منتجات"}</div>
         ) : (
