@@ -14,6 +14,7 @@ const PAYMENT_METHODS = new Set(["instapay", "vodafone", "etisalat", "paypal"]);
 type CartInput = { id: string; quantity: number };
 
 export async function POST(request: Request) {
+  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
   const contentLength = Number(request.headers.get("content-length") || 0);
   if (contentLength > 64 * 1024) {
     return NextResponse.json({ error: "حجم الطلب أكبر من المسموح" }, { status: 413 });

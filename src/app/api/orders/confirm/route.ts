@@ -3,12 +3,10 @@ import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 import { isValidAdminSession } from "@/lib/admin-auth";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+
 
 export async function POST(request: Request) {
+  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
   if (!isValidAdminSession(request.headers.get("cookie"))) {
     return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
   }

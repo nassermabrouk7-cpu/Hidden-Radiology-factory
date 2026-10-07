@@ -9,6 +9,7 @@ const supabase = createClient(
 );
 
 export async function GET(request: Request) {
+  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
   const ip = request.headers.get("x-real-ip") || request.headers.get("x-forwarded-for")?.split(",").at(-1)?.trim() || "unknown";
   if (isRateLimited(`order-status:${ip}`, 30, 60 * 1000)) {
     return NextResponse.json({ error: "محاولات كثيرة. حاول لاحقاً." }, { status: 429 });
