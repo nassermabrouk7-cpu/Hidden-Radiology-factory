@@ -1,5 +1,7 @@
 ﻿import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";\nimport { Resend } from "resend";
+import { createClient } from "@supabase/supabase-js";
+import { Resend } from "resend";
+import { isValidAdminSession } from "@/lib/admin-auth";
 
 export const dynamic = 'force-dynamic';
 
@@ -9,11 +11,9 @@ function getSupabase() {
   if (!url || !key) throw new Error('Missing Supabase env vars');
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
-import { isValidAdminSession } from "@/lib/admin-auth";
 
-
-
-export async function POST(request: Request) {`n  const supabase = getSupabase();
+export async function POST(request: Request) {
+  const supabase = getSupabase();
   
   if (!isValidAdminSession(request.headers.get("cookie"))) {
     return NextResponse.json({ error: "ØºÙŠØ± Ù…ØµØ±Ø­" }, { status: 401 });
@@ -106,18 +106,19 @@ export async function POST(request: Request) {`n  const supabase = getSupabase()
       try {
         const isArabic = order.language === "ar";
         const resend = new Resend(process.env.RESEND_API_KEY);
+        const downloadLinks = deliveryItems.map((item) =>
+          '<li style="margin:16px 0"><a style="color:#00E5FF" href="' + escapeHtml(item.url) + '">' + escapeHtml(item.title || "Download book") + '</a></li>'
+        ).join("");
         const { error: sendError } = await resend.emails.send({
           from: process.env.RESEND_FROM_EMAIL,
           to: order.customer_email,
           subject: isArabic ? "ØªØ£ÙƒÙŠØ¯ Ø·Ù„Ø¨Ùƒ Ù…Ù† Hidden Radiology" : "Your Hidden Radiology order is confirmed",
-          html: `
-            <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:32px;background:#0A192F;color:#fff;border-radius:16px">
-              <h1 style="color:#00E5FF">${isArabic ? "ØªÙ… ØªØ£ÙƒÙŠØ¯ Ø·Ù„Ø¨Ùƒ" : "Your order is confirmed"}</h1>
-              <p>${isArabic ? "Ø±Ù‚Ù… Ø§Ù„Ø·Ù„Ø¨" : "Order reference"}: ${escapeHtml(referenceId)}</p>
-              <ul>${deliveryItems.map((item) => `<li style="margin:16px 0"><a style="color:#00E5FF" href="${escapeHtml(item.url)}">${escapeHtml(item.title || (isArabic ? "ØªÙ†Ø²ÙŠÙ„ Ø§Ù„ÙƒØªØ§Ø¨" : "Download book"))}</a></li>`).join("")}</ul>
-              <p style="color:#aab6cf">${isArabic ? "Ø±ÙˆØ§Ø¨Ø· Ø§Ù„ØªÙ†Ø²ÙŠÙ„ ØµØ§Ù„Ø­Ø© Ù„Ù…Ø¯Ø© 24 Ø³Ø§Ø¹Ø©." : "Download links expire in 24 hours."}</p>
-            </div>
-          `,
+          html:
+            '<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:32px;background:#0A192F;color:#fff;border-radius:16px">' +
+            '<h1 style="color:#00E5FF">' + (isArabic ? "تم تأكيد طلبك" : "Your order is confirmed") + '</h1>' +
+            '<p>' + (isArabic ? "رقم الطلب" : "Order reference") + ': ' + escapeHtml(referenceId) + '</p>' +
+            '<ul>' + downloadLinks + '</ul>' +
+            '<p style="color:#aab6cf">' + (isArabic ? "روابط التنزيل صالحة لمدة 24 ساعة." : "Download links expire in 24 hours.") + '</p></div>',
         });
         if (sendError) throw new Error(sendError.message);
         
@@ -156,6 +157,7 @@ function escapeHtml(value: unknown) {
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   })[character]!);
 }
+
 
 
 
