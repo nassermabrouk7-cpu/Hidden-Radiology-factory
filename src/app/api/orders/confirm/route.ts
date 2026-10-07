@@ -1,20 +1,28 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import { Resend } from "resend";
+﻿import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";\nimport { Resend } from "resend";
+
+export const dynamic = 'force-dynamic';
+
+function getSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Missing Supabase env vars');
+  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+}
 import { isValidAdminSession } from "@/lib/admin-auth";
 
 
 
-export async function POST(request: Request) {
-  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+export async function POST(request: Request) {`n  const supabase = getSupabase();
+  
   if (!isValidAdminSession(request.headers.get("cookie"))) {
-    return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
+    return NextResponse.json({ error: "ØºÙŠØ± Ù…ØµØ±Ø­" }, { status: 401 });
   }
 
   try {
     const body: unknown = await request.json();
     if (typeof body !== "object" || body === null || !("referenceId" in body) || typeof body.referenceId !== "string") {
-      return NextResponse.json({ error: "رقم الطلب غير صالح" }, { status: 400 });
+      return NextResponse.json({ error: "Ø±Ù‚Ù… Ø§Ù„Ø·Ù„Ø¨ ØºÙŠØ± ØµØ§Ù„Ø­" }, { status: 400 });
     }
     const { referenceId } = body;
 
@@ -22,7 +30,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Order reference is required" }, { status: 400 });
     }
 
-    // 1. جلب بيانات الطلب
+    // 1. Ø¬Ù„Ø¨ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø·Ù„Ø¨
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .select("*")
@@ -34,7 +42,7 @@ export async function POST(request: Request) {
     }
 
     if (order.status !== "pending_verification") {
-      return NextResponse.json({ error: "الطلب ليس بانتظار التحقق من الدفع" }, { status: 409 });
+      return NextResponse.json({ error: "Ø§Ù„Ø·Ù„Ø¨ Ù„ÙŠØ³ Ø¨Ø§Ù†ØªØ¸Ø§Ø± Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† Ø§Ù„Ø¯ÙØ¹" }, { status: 409 });
     }
     const orderItems = Array.isArray(order.items) ? order.items as Array<{ product_id?: string; quantity?: number }> : [];
     const productIds = [...new Set([
@@ -42,7 +50,7 @@ export async function POST(request: Request) {
       ...(typeof order.product_id === "string" ? [order.product_id] : []),
     ])];
     if (productIds.length === 0) {
-      return NextResponse.json({ error: "لا يحتوي الطلب على منتجات قابلة للتسليم" }, { status: 409 });
+      return NextResponse.json({ error: "Ù„Ø§ ÙŠØ­ØªÙˆÙŠ Ø§Ù„Ø·Ù„Ø¨ Ø¹Ù„Ù‰ Ù…Ù†ØªØ¬Ø§Øª Ù‚Ø§Ø¨Ù„Ø© Ù„Ù„ØªØ³Ù„ÙŠÙ…" }, { status: 409 });
     }
 
     const { data: products, error: productError } = await supabase
@@ -50,7 +58,7 @@ export async function POST(request: Request) {
       .select("id, title_ar, title_en, language, pdf_url")
       .in("id", productIds);
     if (productError || !products || products.length !== productIds.length) {
-      return NextResponse.json({ error: "تعذر العثور على ملفات المنتجات" }, { status: 409 });
+      return NextResponse.json({ error: "ØªØ¹Ø°Ø± Ø§Ù„Ø¹Ø«ÙˆØ± Ø¹Ù„Ù‰ Ù…Ù„ÙØ§Øª Ø§Ù„Ù…Ù†ØªØ¬Ø§Øª" }, { status: 409 });
     }
 
     const productsById = new Map(products.map((product) => [String(product.id), product]));
@@ -60,11 +68,11 @@ export async function POST(request: Request) {
       const product = productsById.get(item.product_id);
       const storagePath = getPdfStoragePath(product?.pdf_url);
       if (!product || !storagePath) {
-        return NextResponse.json({ error: "ملف أحد المنتجات غير جاهز للتسليم الآمن" }, { status: 409 });
+        return NextResponse.json({ error: "Ù…Ù„Ù Ø£Ø­Ø¯ Ø§Ù„Ù…Ù†ØªØ¬Ø§Øª ØºÙŠØ± Ø¬Ø§Ù‡Ø² Ù„Ù„ØªØ³Ù„ÙŠÙ… Ø§Ù„Ø¢Ù…Ù†" }, { status: 409 });
       }
       const { data: signed, error: signedError } = await supabase.storage.from("pdfs").createSignedUrl(storagePath, 60 * 60 * 24);
       if (signedError || !signed?.signedUrl) {
-        return NextResponse.json({ error: "تعذر إنشاء رابط تنزيل آمن" }, { status: 500 });
+        return NextResponse.json({ error: "ØªØ¹Ø°Ø± Ø¥Ù†Ø´Ø§Ø¡ Ø±Ø§Ø¨Ø· ØªÙ†Ø²ÙŠÙ„ Ø¢Ù…Ù†" }, { status: 500 });
       }
       deliveryItems.push({
         title: product.language === "ar" ? product.title_ar : product.title_en,
@@ -72,7 +80,7 @@ export async function POST(request: Request) {
       });
     }
     if (deliveryItems.length === 0) {
-      return NextResponse.json({ error: "لا توجد ملفات قابلة للتسليم" }, { status: 409 });
+      return NextResponse.json({ error: "Ù„Ø§ ØªÙˆØ¬Ø¯ Ù…Ù„ÙØ§Øª Ù‚Ø§Ø¨Ù„Ø© Ù„Ù„ØªØ³Ù„ÙŠÙ…" }, { status: 409 });
     }
 
     // Only one concurrent admin request can confirm a pending order.
@@ -89,7 +97,7 @@ export async function POST(request: Request) {
 
     if (updateError) {
       console.error("Error updating order:", updateError);
-      return NextResponse.json({ error: "تم تحديث الطلب أو تعذر تحديثه" }, { status: 409 });
+      return NextResponse.json({ error: "ØªÙ… ØªØ­Ø¯ÙŠØ« Ø§Ù„Ø·Ù„Ø¨ Ø£Ùˆ ØªØ¹Ø°Ø± ØªØ­Ø¯ÙŠØ«Ù‡" }, { status: 409 });
     }
 
     // Send time-limited signed links after an administrator verifies the payment.
@@ -101,20 +109,20 @@ export async function POST(request: Request) {
         const { error: sendError } = await resend.emails.send({
           from: process.env.RESEND_FROM_EMAIL,
           to: order.customer_email,
-          subject: isArabic ? "تأكيد طلبك من Hidden Radiology" : "Your Hidden Radiology order is confirmed",
+          subject: isArabic ? "ØªØ£ÙƒÙŠØ¯ Ø·Ù„Ø¨Ùƒ Ù…Ù† Hidden Radiology" : "Your Hidden Radiology order is confirmed",
           html: `
             <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:32px;background:#0A192F;color:#fff;border-radius:16px">
-              <h1 style="color:#00E5FF">${isArabic ? "تم تأكيد طلبك" : "Your order is confirmed"}</h1>
-              <p>${isArabic ? "رقم الطلب" : "Order reference"}: ${escapeHtml(referenceId)}</p>
-              <ul>${deliveryItems.map((item) => `<li style="margin:16px 0"><a style="color:#00E5FF" href="${escapeHtml(item.url)}">${escapeHtml(item.title || (isArabic ? "تنزيل الكتاب" : "Download book"))}</a></li>`).join("")}</ul>
-              <p style="color:#aab6cf">${isArabic ? "روابط التنزيل صالحة لمدة 24 ساعة." : "Download links expire in 24 hours."}</p>
+              <h1 style="color:#00E5FF">${isArabic ? "ØªÙ… ØªØ£ÙƒÙŠØ¯ Ø·Ù„Ø¨Ùƒ" : "Your order is confirmed"}</h1>
+              <p>${isArabic ? "Ø±Ù‚Ù… Ø§Ù„Ø·Ù„Ø¨" : "Order reference"}: ${escapeHtml(referenceId)}</p>
+              <ul>${deliveryItems.map((item) => `<li style="margin:16px 0"><a style="color:#00E5FF" href="${escapeHtml(item.url)}">${escapeHtml(item.title || (isArabic ? "ØªÙ†Ø²ÙŠÙ„ Ø§Ù„ÙƒØªØ§Ø¨" : "Download book"))}</a></li>`).join("")}</ul>
+              <p style="color:#aab6cf">${isArabic ? "Ø±ÙˆØ§Ø¨Ø· Ø§Ù„ØªÙ†Ø²ÙŠÙ„ ØµØ§Ù„Ø­Ø© Ù„Ù…Ø¯Ø© 24 Ø³Ø§Ø¹Ø©." : "Download links expire in 24 hours."}</p>
             </div>
           `,
         });
         if (sendError) throw new Error(sendError.message);
         
         emailSent = true;
-        console.log("✅ Email sent successfully to:", order.customer_email);
+        console.log("âœ… Email sent successfully to:", order.customer_email);
       } catch (emailError) {
         console.error("Email delivery failed:", emailError);
       }
@@ -148,3 +156,6 @@ function escapeHtml(value: unknown) {
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   })[character]!);
 }
+
+
+
