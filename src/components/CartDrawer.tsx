@@ -7,7 +7,7 @@ import Link from "next/link";
 
 export default function CartDrawer() {
   const { items, removeFromCart, updateQuantity, totalPrice, isCartOpen, setIsCartOpen } = useCart();
-  const { lang, t } = useLanguage();
+  const { lang } = useLanguage();
   const isRTL = lang === "ar";
 
   if (!isCartOpen) return null;

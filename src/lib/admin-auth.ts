@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+﻿import { createHmac, timingSafeEqual } from "node:crypto";
 
 export const ADMIN_COOKIE_NAME = "hr_admin_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 8;
@@ -66,5 +66,5 @@ export function isSameOriginRequest(request: Request) {
 
 export function adminCookieHeader(token: string, maxAge: number) {
   const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
-  return `${ADMIN_COOKIE_NAME}=${token}; Path=/api; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure}`;
+  return `${ADMIN_COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure}`;
 }
