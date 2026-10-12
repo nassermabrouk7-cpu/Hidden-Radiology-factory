@@ -21,7 +21,7 @@ Instagram direct publishing also requires an Instagram professional account and 
 - It creates six Arabic and six English posts, using only configured platforms when publisher credentials are present.
 - It stores the existing product cover URL as the campaign image. It does not synthesize a separate graphic.
 - Social publishing is disabled by default. When explicitly enabled, images are accepted only from this project's HTTPS Supabase public storage.
-- The publisher atomically changes a queue row to `scheduled` before calling the provider. Failed attempts are recorded; abandoned claims older than 30 minutes are returned to the queue.
+- The publisher atomically changes a queue row to `scheduled` before calling the provider. Failed attempts are recorded. Claims older than 30 minutes without a provider response are marked `failed` for manual reconciliation; they are not retried automatically because the provider may already have accepted the post.
 - Campaign content is educational marketing copy. The prompt prohibits invented clinical cases, medical statistics, diagnoses, and guaranteed outcomes.
 - `/api/marketing/generate` and `/api/marketing/publish` accept POST only and require `Authorization: Bearer <CRON_SECRET>`, checked with a constant-time comparison. The cron route uses only configured deployment URLs and does not trust the incoming Host header.
 - `MARKETING_AUTO_PUBLISH=true` is required before any public publishing can happen. `MARKETING_ALLOW_PAID_METRICOOL_API=true` is a separate paid-plan gate and should stay disabled on free plans.

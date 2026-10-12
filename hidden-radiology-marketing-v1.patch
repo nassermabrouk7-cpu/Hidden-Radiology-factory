@@ -1,0 +1,454 @@
+diff --git a/supabase/migrations/202610080002_marketing_engine.sql b/supabase/migrations/202610080002_marketing_engine.sql
+new file mode 100644
+--- /dev/null
++++ b/supabase/migrations/202610080002_marketing_engine.sql
+@@ -0,0 +1,66 @@
++create extension if not exists pgcrypto;
++
++create table if not exists public.marketing_campaigns (
++  id uuid primary key default gen_random_uuid(),
++  product_id text not null,
++  name text not null,
++  objective text not null,
++  audience text not null,
++  positioning text not null,
++  theme text not null,
++  language_strategy text not null default 'ar+en',
++  status text not null default 'ready'
++    check (status in ('ready', 'active', 'paused', 'completed')),
++  metadata jsonb not null default '{}'::jsonb,
++  created_at timestamptz not null default now(),
++  updated_at timestamptz not null default now()
++);
++
++create table if not exists public.marketing_content (
++  id uuid primary key default gen_random_uuid(),
++  campaign_id uuid not null references public.marketing_campaigns(id) on delete cascade,
++  product_id text not null,
++  platform text not null
++    check (platform in ('instagram', 'facebook', 'linkedin')),
++  language text not null
++    check (language in ('ar', 'en')),
++  content_type text not null
++    check (content_type in ('authority', 'education', 'case', 'product', 'trust', 'conversion')),
++  title text not null,
++  hook text not null,
++  body text not null,
++  cta text not null,
++  hashtags text[] not null default '{}',
++  destination_url text,
++  scheduled_at timestamptz,
++  status text not null default 'queued'
++    check (status in ('queued', 'approved', 'scheduled', 'published', 'failed')),
++  metadata jsonb not null default '{}'::jsonb,
++  created_at timestamptz not null default now(),
++  updated_at timestamptz not null default now()
++);
++
++create index if not exists marketing_campaigns_product_created_idx
++  on public.marketing_campaigns (product_id, created_at desc);
++
++create index if not exists marketing_content_schedule_idx
++  on public.marketing_content (status, scheduled_at);
++
++alter table public.marketing_campaigns enable row level security;
++alter table public.marketing_content enable row level security;
++
++drop policy if exists "marketing_campaigns_no_client_access" on public.marketing_campaigns;
++create policy "marketing_campaigns_no_client_access"
++  on public.marketing_campaigns
++  for all
++  to anon, authenticated
++  using (false)
++  with check (false);
++
++drop policy if exists "marketing_content_no_client_access" on public.marketing_content;
++create policy "marketing_content_no_client_access"
++  on public.marketing_content
++  for all
++  to anon, authenticated
++  using (false)
++  with check (false);
+diff --git a/src/lib/marketing-ai.ts b/src/lib/marketing-ai.ts
+new file mode 100644
+--- /dev/null
++++ b/src/lib/marketing-ai.ts
+@@ -0,0 +1,137 @@
++const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
++
++type Product = {
++  id: string;
++  title_ar: string;
++  title_en: string;
++  category: string;
++  price: number;
++  language: string;
++};
++
++export type GeneratedCampaign = {
++  name: string;
++  objective: string;
++  audience: string;
++  positioning: string;
++  theme: string;
++  language_strategy: string;
++  content: Array<{
++    platform: "instagram" | "facebook" | "linkedin";
++    language: "ar" | "en";
++    content_type: "authority" | "education" | "case" | "product" | "trust" | "conversion";
++    title: string;
++    hook: string;
++    body: string;
++    cta: string;
++    hashtags: string[];
++  }>;
++};
++
++function getApiKey() {
++  const key = process.env.OPENAI_API_KEY;
++  if (!key) throw new Error("OPENAI_API_KEY is not configured");
++  return key;
++}
++
++function getModel() {
++  return process.env.MARKETING_AI_MODEL || "gpt-6-luna";
++}
++
++function extractOutputText(response: unknown) {
++  const output = (response as { output?: unknown[] })?.output;
++  if (!Array.isArray(output)) return "";
++
++  const chunks: string[] = [];
++  for (const item of output) {
++    if (!item || typeof item !== "object") continue;
++    const content = (item as { content?: unknown[] }).content;
++    if (!Array.isArray(content)) continue;
++    for (const part of content) {
++      if (!part || typeof part !== "object") continue;
++      const text = (part as { text?: unknown }).text;
++      if (typeof text === "string") chunks.push(text);
++    }
++  }
++  return chunks.join("\n").trim();
++}
++
++function parseJson<T>(text: string): T {
++  const cleaned = text
++    .replace(/^```json\s*/i, "")
++    .replace(/^```\s*/i, "")
++    .replace(/\s*```$/i, "")
++    .trim();
++
++  try {
++    return JSON.parse(cleaned) as T;
++  } catch {
++    const start = cleaned.indexOf("{");
++    const end = cleaned.lastIndexOf("}");
++    if (start < 0 || end <= start) throw new Error("AI returned invalid JSON");
++    return JSON.parse(cleaned.slice(start, end + 1)) as T;
++  }
++}
++
++export async function generateCampaign(product: Product): Promise<GeneratedCampaign> {
++  const systemPrompt = `
++You are the senior marketing strategist for Hidden Radiology, a specialized radiology education brand.
++The brand sells educational books and also offers lessons, courses, and clinical cases.
++The goal is authority, trust, education, and sustainable conversion — never spammy "buy now" content.
++Medical content must remain educational and cautious. Do not invent clinical claims, statistics, diagnoses, or guideline recommendations.
++Do not imply guaranteed outcomes.
++Generate concise social content suitable for Instagram, Facebook, and LinkedIn.
++Create a bilingual campaign: Arabic for MENA learners and English for the global radiology audience.
++Use a professional, academic, modern tone.
++Return ONLY valid JSON matching the requested structure.
++`;
++
++  const userPrompt = `
++Product:
++${JSON.stringify(product)}
++
++Create one campaign with exactly 12 content items:
++- 4 authority items
++- 3 education items
++- 2 trust items
++- 2 product/conversion items
++- 1 case-style item
++For each of the 6 core ideas, create one Arabic and one English version.
++Distribute platforms naturally among Instagram, Facebook, and LinkedIn.
++Use one clear idea per item.
++The product must be presented as a reference/resource, not as a medical authority.
++`;
++
++  const response = await fetch(OPENAI_RESPONSES_URL, {
++    method: "POST",
++    headers: {
++      "Content-Type": "application/json",
++      Authorization: `Bearer ${getApiKey()}`,
++    },
++    body: JSON.stringify({
++      model: getModel(),
++      input: [
++        { role: "developer", content: systemPrompt },
++        { role: "user", content: userPrompt },
++      ],
++      max_output_tokens: 6000,
++    }),
++  });
++
++  const raw = await response.text();
++  if (!response.ok) {
++    console.error("OpenAI marketing request failed:", response.status, raw.slice(0, 500));
++    throw new Error(`OpenAI request failed (${response.status})`);
++  }
++
++  let payload: unknown;
++  try {
++    payload = JSON.parse(raw);
++  } catch {
++    throw new Error("OpenAI returned invalid response");
++  }
++
++  const outputText = extractOutputText(payload);
++  if (!outputText) throw new Error("OpenAI returned empty output");
++  return parseJson<GeneratedCampaign>(outputText);
++}
+diff --git a/src/app/api/marketing/generate/route.ts b/src/app/api/marketing/generate/route.ts
+new file mode 100644
+--- /dev/null
++++ b/src/app/api/marketing/generate/route.ts
+@@ -0,0 +1,187 @@
++import { NextRequest, NextResponse } from "next/server";
++import { createClient } from "@supabase/supabase-js";
++import { generateCampaign, type GeneratedCampaign } from "@/lib/marketing-ai";
++
++export const runtime = "nodejs";
++export const dynamic = "force-dynamic";
++
++function getSupabase() {
++  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
++  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
++  if (!url || !key) throw new Error("Supabase environment is not configured");
++  return createClient(url, key, {
++    auth: { persistSession: false, autoRefreshToken: false },
++  });
++}
++
++function authorized(request: NextRequest) {
++  const secret = process.env.CRON_SECRET;
++  const auth = request.headers.get("authorization");
++  return Boolean(secret && auth === `Bearer ${secret}`);
++}
++
++function getSiteUrl() {
++  return (
++    process.env.MARKETING_SITE_URL ||
++    process.env.NEXT_PUBLIC_SITE_URL ||
++    "https://hidden-radiology-project.vercel.app"
++  ).replace(/\/+$/, "");
++}
++
++function validateCampaign(value: GeneratedCampaign) {
++  if (!value || typeof value !== "object") throw new Error("AI campaign is invalid");
++  if (!Array.isArray(value.content) || value.content.length !== 12) {
++    throw new Error("AI campaign must contain exactly 12 content items");
++  }
++
++  for (const item of value.content) {
++    if (!item || typeof item !== "object") throw new Error("AI campaign contains invalid content");
++    if (!["instagram", "facebook", "linkedin"].includes(item.platform)) {
++      throw new Error("AI campaign contains invalid platform");
++    }
++    if (!["ar", "en"].includes(item.language)) {
++      throw new Error("AI campaign contains invalid language");
++    }
++    if (!["authority", "education", "case", "product", "trust", "conversion"].includes(item.content_type)) {
++      throw new Error("AI campaign contains invalid content type");
++    }
++    for (const key of ["title", "hook", "body", "cta"] as const) {
++      if (typeof item[key] !== "string" || !item[key].trim()) {
++        throw new Error(`AI campaign contains empty ${key}`);
++      }
++    }
++    if (!Array.isArray(item.hashtags)) item.hashtags = [];
++  }
++}
++
++export async function POST(request: NextRequest) {
++  if (!authorized(request)) {
++    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
++  }
++
++  try {
++    const supabase = getSupabase();
++    const url = new URL(request.url);
++    const requestedProductId = url.searchParams.get("product_id");
++
++    const { data: products, error: productError } = await supabase
++      .from("products")
++      .select("id, title_ar, title_en, category, price, language")
++      .order("created_at", { ascending: true })
++      .limit(200);
++
++    if (productError) throw new Error("تعذر قراءة المنتجات التسويقية");
++    if (!products?.length) {
++      return NextResponse.json({ error: "لا توجد منتجات لتوليد حملة" }, { status: 404 });
++    }
++
++    let product = requestedProductId
++      ? products.find((item) => String(item.id) === requestedProductId)
++      : undefined;
++
++    if (!product) {
++      const { data: campaigns, error: campaignError } = await supabase
++        .from("marketing_campaigns")
++        .select("product_id, created_at")
++        .order("created_at", { ascending: false })
++        .limit(500);
++
++      if (campaignError) throw new Error("تعذر قراءة سجل الحملات");
++
++      const latestByProduct = new Map<string, string>();
++      for (const campaign of campaigns || []) {
++        const id = String(campaign.product_id);
++        if (!latestByProduct.has(id)) latestByProduct.set(id, campaign.created_at);
++      }
++
++      product = [...products].sort((a, b) => {
++        const aLast = latestByProduct.get(String(a.id)) || "";
++        const bLast = latestByProduct.get(String(b.id)) || "";
++        if (!aLast && bLast) return -1;
++        if (aLast && !bLast) return 1;
++        return aLast.localeCompare(bLast);
++      })[0];
++    }
++
++    const campaign = await generateCampaign(product);
++    validateCampaign(campaign);
++
++    const { data: insertedCampaign, error: insertCampaignError } = await supabase
++      .from("marketing_campaigns")
++      .insert({
++        product_id: String(product.id),
++        name: campaign.name,
++        objective: campaign.objective,
++        audience: campaign.audience,
++        positioning: campaign.positioning,
++        theme: campaign.theme,
++        language_strategy: campaign.language_strategy,
++        status: "ready",
++        metadata: {
++          generated_by: "openai_responses",
++          model: process.env.MARKETING_AI_MODEL || "gpt-6-luna",
++        },
++      })
++      .select("id")
++      .single();
++
++    if (insertCampaignError || !insertedCampaign) {
++      throw new Error("تعذر حفظ الحملة");
++    }
++
++    const now = new Date();
++    const items = campaign.content.map((item, index) => {
++      const dayOffset = Math.floor(index / 2);
++      const hourUtc = item.language === "ar" ? 6 : 15;
++      const scheduled = new Date(now);
++      scheduled.setUTCDate(scheduled.getUTCDate() + dayOffset);
++      scheduled.setUTCHours(hourUtc, 0, 0, 0);
++
++      return {
++        campaign_id: insertedCampaign.id,
++        product_id: String(product.id),
++        platform: item.platform,
++        language: item.language,
++        content_type: item.content_type,
++        title: item.title,
++        hook: item.hook,
++        body: item.body,
++        cta: item.cta,
++        hashtags: item.hashtags,
++        destination_url: `${getSiteUrl()}/library`,
++        scheduled_at: scheduled.toISOString(),
++        status: "queued",
++        metadata: { sequence: index + 1 },
++      };
++    });
++
++    const { error: insertContentError } = await supabase
++      .from("marketing_content")
++      .insert(items);
++
++    if (insertContentError) throw new Error("تعذر حفظ محتوى الحملة");
++
++    return NextResponse.json({
++      success: true,
++      campaignId: insertedCampaign.id,
++      product: {
++        id: String(product.id),
++        title_ar: product.title_ar,
++        title_en: product.title_en,
++      },
++      contentCount: items.length,
++      status: "queued",
++      message: "تم إنشاء حملة AI ووضعها في طابور النشر",
++    });
++  } catch (error) {
++    console.error("Marketing generation failed:", error);
++    return NextResponse.json(
++      { error: error instanceof Error ? error.message : "Marketing generation failed" },
++      { status: 500 },
++    );
++  }
++}
++
++export async function GET(request: NextRequest) {
++  return POST(request);
++}
+diff --git a/src/app/api/marketing/cron/route.ts b/src/app/api/marketing/cron/route.ts
+new file mode 100644
+--- /dev/null
++++ b/src/app/api/marketing/cron/route.ts
+@@ -0,0 +1,31 @@
++import { NextRequest, NextResponse } from "next/server";
++
++export const runtime = "nodejs";
++export const dynamic = "force-dynamic";
++
++export async function GET(request: NextRequest) {
++  const secret = process.env.CRON_SECRET;
++  const auth = request.headers.get("authorization");
++  if (!secret || auth !== `Bearer ${secret}`) {
++    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
++  }
++
++  const deploymentHost = process.env.VERCEL_URL || request.headers.get("host");
++  const baseUrl = process.env.MARKETING_INTERNAL_URL
++    ? process.env.MARKETING_INTERNAL_URL.replace(/\/+$/, "")
++    : deploymentHost
++      ? `https://${deploymentHost}`
++      : "http://localhost:3000";
++
++  const response = await fetch(`${baseUrl}/api/marketing/generate`, {
++    method: "POST",
++    headers: { authorization: `Bearer ${secret}` },
++    cache: "no-store",
++  });
++
++  const body = await response.text();
++  return new NextResponse(body, {
++    status: response.status,
++    headers: { "Content-Type": "application/json" },
++  });
++}
+diff --git a/vercel.json b/vercel.json
+new file mode 100644
+--- /dev/null
++++ b/vercel.json
+@@ -0,0 +1,8 @@
++{
++  "crons": [
++    {
++      "path": "/api/marketing/cron",
++      "schedule": "0 6 * * *"
++    }
++  ]
++}

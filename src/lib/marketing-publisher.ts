@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { isMarketingItemPublishAuthorized } from "@/lib/marketing-auth";
+import { getTrustedProductCoverUrl } from "@/lib/marketing-media";
 
 type Platform = "instagram" | "facebook" | "linkedin";
 
@@ -45,14 +46,7 @@ function sanitizeError(value: unknown): string {
 }
 
 function isTrustedMediaUrl(value: string): boolean {
-  try {
-    const media = new URL(value);
-    const supabase = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    if (media.protocol !== "https:" || !supabase) return false;
-    return media.hostname === new URL(supabase).hostname && media.pathname.includes("/storage/v1/object/public/");
-  } catch {
-    return false;
-  }
+  return getTrustedProductCoverUrl(value, process.env.NEXT_PUBLIC_SUPABASE_URL) !== null;
 }
 
 function sanitizeText(value: string): string {
@@ -606,12 +600,16 @@ export async function publishNextMarketingItem(): Promise<{
   const staleLockBefore = new Date(Date.now() - 30 * 60 * 1000).toISOString();
   const { error: staleLockError } = await supabase
     .from("marketing_content")
-    .update({ status: "queued", updated_at: now })
+    .update({
+      status: "failed",
+      error_message: "Publishing attempt timed out; verify the platform before manually retrying.",
+      updated_at: now,
+    })
     .eq("status", "scheduled")
     .is("platform_response", null)
     .is("external_post_id", null)
     .lt("last_attempt_at", staleLockBefore);
-  if (staleLockError) throw new Error(`Failed to recover stale publishing item: ${staleLockError.message}`);
+  if (staleLockError) throw new Error(`Failed to flag an ambiguous publishing attempt: ${staleLockError.message}`);
 
   const configuredPlatforms: Platform[] = isMetricoolEnabled()
     ? (process.env.METRICOOL_PLATFORMS || "facebook,instagram,linkedin").split(",").map((value) => value.trim()).filter((value): value is Platform => ["facebook", "instagram", "linkedin"].includes(value as Platform))

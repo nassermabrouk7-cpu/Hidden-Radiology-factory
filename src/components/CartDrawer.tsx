@@ -4,6 +4,7 @@ import { useCart } from "@/context/CartContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { X, Plus, Minus, Trash2, ShoppingBag } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function CartDrawer() {
   const { items, removeFromCart, updateQuantity, totalPrice, isCartOpen, setIsCartOpen } = useCart();
@@ -49,9 +50,11 @@ export default function CartDrawer() {
           ) : (
             items.map((item) => (
               <div key={item.id} className="flex gap-4 bg-[#0A192F] p-4 rounded-xl border border-[#1a2f4a]">
-                <img 
+                <Image
                   src={item.cover_url} 
                   alt={lang === "ar" ? item.title_ar : item.title_en}
+                  width={64}
+                  height={80}
                   className="w-20 h-24 object-cover rounded-lg bg-[#112240]"
                 />
                 <div className="flex-1 flex flex-col justify-between">

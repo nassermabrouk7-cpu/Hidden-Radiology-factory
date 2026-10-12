@@ -5,7 +5,11 @@ const SESSION_TTL_SECONDS = 60 * 60 * 8;
 
 function getSecret(name: "ADMIN_PASSWORD" | "ADMIN_SESSION_SECRET") {
   const value = process.env[name];
-  if (!value || value.length < 32) return null;
+  if (!value) return null;
+
+  if (name === "ADMIN_SESSION_SECRET" && value.length < 32) return null;
+  if (name === "ADMIN_PASSWORD" && value.length < 12) return null;
+
   return value;
 }
 

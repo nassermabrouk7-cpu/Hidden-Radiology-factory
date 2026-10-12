@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { isSameOriginRequest, isValidAdminSession } from "@/lib/admin-auth";
+import { getTrustedProductCoverUrl } from "@/lib/marketing-media";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,14 +16,19 @@ export async function GET(request: Request) {
 
   const supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data: content, error } = await supabase.from("marketing_content")
-    .select("id, campaign_id, product_id, platform, language, content_type, title, hook, body, cta, hashtags, destination_url, scheduled_at, status, publish_attempts, published_at, error_message, created_at")
+    .select("id, campaign_id, product_id, platform, language, content_type, title, hook, body, cta, hashtags, destination_url, scheduled_at, status, metadata, publish_attempts, published_at, error_message, created_at")
     .order("created_at", { ascending: false })
     .limit(100);
   if (error) {
     console.error("Marketing queue lookup failed:", error.message);
     return NextResponse.json({ error: "تعذر تحميل قائمة الإعلانات" }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }
-  return NextResponse.json({ content: content || [] }, { headers: { "Cache-Control": "no-store, private" } });
+  const safeContent = (content || []).map((item) => {
+    const { metadata, ...queueItem } = item;
+    const mediaMetadata = metadata && typeof metadata === "object" ? metadata as Record<string, unknown> : {};
+    return { ...queueItem, media_url: getTrustedProductCoverUrl(mediaMetadata.media_url, url) };
+  });
+  return NextResponse.json({ content: safeContent }, { headers: { "Cache-Control": "no-store, private" } });
 }
 
 export async function POST(request: Request) {

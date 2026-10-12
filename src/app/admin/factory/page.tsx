@@ -1,3 +1,4 @@
+
 import FactoryClient from "./FactoryClient";
 
 // PDF rendering and external AI requests can exceed the platform's default timeout.

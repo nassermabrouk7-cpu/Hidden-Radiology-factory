@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { generateCampaign, type GeneratedCampaign } from "@/lib/marketing-ai";
 import { isMarketingJobAuthorized } from "@/lib/marketing-auth";
 import { normalizeMarketingSiteUrl } from "@/lib/marketing-site";
+import { getDailyMarketingSchedule } from "@/lib/marketing-schedule";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -88,20 +89,26 @@ export async function POST(request: NextRequest) {
     const supabase = getSupabase();
     const url = new URL(request.url);
     const force = url.searchParams.get("force") === "true";
-    const now = new Date().toISOString();
 
-    // A campaign already covering future posting dates is enough; avoid queuing 12 new posts every day.
+    // Do not add a campaign while any prior content still needs review, publishing, or reconciliation.
     if (!force) {
       const { data: pending, error } = await supabase
         .from("marketing_content")
         .select("id")
         .in("status", ["queued", "approved", "scheduled"])
-        .gte("scheduled_at", now)
         .limit(1);
       if (error) throw new Error("Could not inspect the marketing queue");
       if (pending?.length) {
         return NextResponse.json({ success: true, status: "queue_active", generated: false, message: "The existing campaign already has scheduled content." });
       }
+    }
+
+    const availablePlatforms = getConfiguredPlatforms();
+    if (!availablePlatforms.length) {
+      return NextResponse.json(
+        { error: "No social publishing integration is configured." },
+        { status: 503 },
+      );
     }
 
     // Resolve the destination before calling Gemini or writing any campaign rows.
@@ -133,8 +140,7 @@ export async function POST(request: NextRequest) {
       })[0];
     }
 
-    const availablePlatforms = getConfiguredPlatforms();
-    const campaignPlatforms = availablePlatforms.length ? availablePlatforms : ["instagram", "facebook", "linkedin"] as Platform[];
+    const campaignPlatforms = availablePlatforms;
     const campaign = await generateCampaign(product, campaignPlatforms);
     validateCampaign(campaign);
     if (campaign.content.some((item) => !campaignPlatforms.includes(item.platform))) {
@@ -154,11 +160,9 @@ export async function POST(request: NextRequest) {
     }).select("id").single();
     if (campaignError || !insertedCampaign) throw new Error("Could not save the generated campaign");
 
-    // One post per day matches the once-daily Vercel cron on Hobby plans and avoids an accumulating backlog.
+    // One future 06:00 UTC slot per day matches the once-daily Vercel cron.
+    const scheduleStart = new Date();
     const items = campaign.content.map((item, index) => {
-      const scheduled = new Date();
-      scheduled.setUTCDate(scheduled.getUTCDate() + index);
-      scheduled.setUTCHours(item.language === "ar" ? 6 : 15, 0, 0, 0);
       return {
         campaign_id: insertedCampaign.id,
         product_id: String(product.id),
@@ -171,7 +175,7 @@ export async function POST(request: NextRequest) {
         cta: item.cta,
         hashtags: item.hashtags,
         destination_url: `${siteUrl}/library`,
-        scheduled_at: scheduled.toISOString(),
+        scheduled_at: getDailyMarketingSchedule(index, scheduleStart),
         status: "queued",
         metadata: { sequence: index + 1, media_url: product.cover_url || null },
       };

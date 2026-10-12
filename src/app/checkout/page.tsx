@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { useCart } from "@/context/CartContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { CreditCard, Smartphone, Wallet, Shield, CheckCircle, Loader2, Copy, MessageCircle, AlertCircle } from "lucide-react";
@@ -167,7 +168,7 @@ export default function CheckoutPage() {
             <div className="space-y-3 mb-6 max-h-64 overflow-y-auto">
               {items.map((item) => (
                 <div key={item.id} className="flex gap-3 bg-[#0A192F] p-3 rounded-lg">
-                  <img src={item.cover_url} alt={isRTL ? item.title_ar : item.title_en} className="w-16 h-20 object-cover rounded flex-shrink-0" />
+                  <Image src={item.cover_url} alt={isRTL ? item.title_ar : item.title_en} width={64} height={80} className="w-16 h-20 object-cover rounded flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <h3 className="font-bold text-sm line-clamp-2">{isRTL ? item.title_ar : item.title_en}</h3>
                     <p className="text-[#00E5FF] font-bold mt-1">${item.price} × {item.quantity}</p>

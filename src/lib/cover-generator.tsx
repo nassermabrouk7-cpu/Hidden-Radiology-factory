@@ -44,6 +44,7 @@ export async function generateCover(data: {
           {/* الشعار في أعلى اليسار */}
           <div style={{ position: 'absolute', top: 40, left: 60, display: 'flex', alignItems: 'center', gap: 15 }}>
             {logoBase64 && (
+              // eslint-disable-next-line @next/next/no-img-element -- Vercel OG requires a data URI image.
               <img src={logoBase64} alt="Hidden Radiology" style={{ width: 80, height: 80 }} />
             )}
             {/* تم إضافة display: flex و flexDirection هنا لحل الخطأ */}

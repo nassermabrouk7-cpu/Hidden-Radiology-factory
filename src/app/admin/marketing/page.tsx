@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Image from "next/image";
 import { Loader2, RefreshCw, Shield } from "lucide-react";
 
 type MarketingItem = {
   id: string; platform: string; language: string; content_type: string; title: string;
   hook: string; body: string; cta: string; hashtags: string[]; scheduled_at: string | null;
-  status: string; error_message: string | null;
+  status: string; error_message: string | null; media_url: string | null;
 };
 
 export default function MarketingAdminPage() {
@@ -114,6 +115,7 @@ export default function MarketingAdminPage() {
                 {item.scheduled_at && <time className="text-slate-400">{new Date(item.scheduled_at).toLocaleString(item.language === "ar" ? "ar-EG" : "en-US", { timeZone: "Africa/Cairo" })}</time>}
               </div>
               <h2 className="mb-2 text-xl font-bold">{item.title}</h2>
+              {item.platform === "instagram" && item.media_url && <Image src={item.media_url} alt="غلاف الكتاب الأصلي للمنشور" width={128} height={192} className="mb-4 h-48 w-32 rounded-lg border border-white/10 object-cover" />}
               <p className="mb-2 font-semibold text-[#00E5FF]">{item.hook}</p>
               <p className="whitespace-pre-wrap leading-7 text-slate-200">{item.body}</p>
               <p className="mt-3 font-semibold">{item.cta}</p>
