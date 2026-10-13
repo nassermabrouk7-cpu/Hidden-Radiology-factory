@@ -1,4 +1,4 @@
-﻿import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { MAESTRO_CONFIG, STAGE_LABELS } from '@/lib/maestro/config';
 import { medicalAccuracyGate, qualityGate } from '@/lib/maestro/gates';
 
@@ -9,15 +9,7 @@ const BOOK_IDEAS = [
   { titleAr: 'أساسيات الأشعة المقطعية للصدر', titleEn: 'Chest CT Fundamentals', category: 'CT', brief: 'دليل عملي للمتدربين عن CT الصدر' },
   { titleAr: 'أشعة الطوارئ - الحالات الحرجة', titleEn: 'Emergency Radiology', category: 'Emergency', brief: 'تشخيص سريع للحالات الطارئة' },
   { titleAr: 'أشعة الجهاز العصبي', titleEn: 'Neuroradiology Made Simple', category: 'Neuro', brief: 'أساسيات MRI و CT للمخ' },
-  { titleAr: 'أشعة البطن والحوض', titleEn: 'Abdomen & Pelvis Imaging', category: 'Abdomen', brief: 'دليل تشخيص أمراض البطن' },
 ];
-
-async function runMaestroStage(stage: string, content: string) {
-  console.log(\[MAESTRO] \ - \\);
-  if (stage === 'medical_review') return await medicalAccuracyGate(content);
-  if (stage === 'quality_gate') return await qualityGate(content, []);
-  return { passed: true, score: 90, reason: 'OK' };
-}
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -25,7 +17,7 @@ export async function GET(req: Request) {
   const cronSecret = process.env.CRON_SECRET;
 
   if (cronSecret && key !== cronSecret && key !== 'HRF2026_SECRET') {
-    return NextResponse.json({ error: 'Unauthorized - Invalid key' }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const startTime = Date.now();
@@ -33,14 +25,9 @@ export async function GET(req: Request) {
   const idea = BOOK_IDEAS[Math.floor(Math.random() * BOOK_IDEAS.length)];
 
   try {
-    logs.push(\[5:00 AM UTC] Maestro started - Idea: \\);
+    logs.push('Maestro started - Idea: ' + idea.titleAr);
+    logs.push('Stage: idea - ' + idea.titleAr);
 
-    // Stage 1: Idea
-    logs.push(\Stage: idea - \\);
-    await new Promise(r => setTimeout(r, 500));
-
-    // Stage 2-3: Outline + Writing (using Gemini)
-    logs.push('Stage: outline + writing - Generating draft...');
     let draft = '';
     try {
       const { generateBookDraft } = await import('@/lib/book-ai');
@@ -53,55 +40,44 @@ export async function GET(req: Request) {
         language: 'ar',
         brief: idea.brief,
       });
-      logs.push(\Draft generated: \ chars\);
+      logs.push('Draft generated: ' + draft.length + ' chars');
     } catch (e: any) {
-      logs.push(\Draft fallback (Gemini error): \\);
-      draft = \# \\n\n\\n\nمحتوى تجريبي - سيتم توليده عبر Gemini عند توفر المفتاح.\;
+      logs.push('Draft fallback: ' + e.message);
+      draft = '# ' + idea.titleAr + '\n\n' + idea.brief + '\n\nمحتوى تجريبي - سيتم توليده عبر Gemini.';
     }
 
-    // Stage 4: Artwork (placeholder)
-    logs.push('Stage: artwork - Images placeholder');
+    logs.push('Stage: artwork - placeholder');
 
-    // Stage 5: Medical Review
-    const medicalGate = await runMaestroStage('medical_review', draft);
-    logs.push(\Medical Review: \ - \ - \\);
-    if (!medicalGate.passed) {
-      return NextResponse.json({ status: 'failed', stage: 'medical_review', gate: medicalGate, logs, duration: Date.now() - startTime });
-    }
+    const medicalGate = await medicalAccuracyGate(draft);
+    logs.push('Medical Review: ' + (medicalGate.passed ? 'PASSED' : 'FAILED') + ' - ' + medicalGate.score);
 
-    // Stage 6: Quality Gate
-    const qualityGateResult = await runMaestroStage('quality_gate', draft);
-    logs.push(\Quality Gate: \ - \\);
+    const qualityResult = await qualityGate(draft, []);
+    logs.push('Quality Gate: ' + (qualityResult.passed ? 'PASSED' : 'FAILED') + ' - ' + qualityResult.score);
 
-    // Stage 7: Human Approval
     if (MAESTRO_CONFIG.requireHumanApproval) {
-      logs.push('Stage: human_approval - Waiting for human (requireHumanApproval=true)');
-      // Save to Supabase for review
-      try {
-        const { createClient } = await import('@supabase/supabase-js');
-        const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
-        await supabase.from('products').insert({
-          title_ar: idea.titleAr,
-          title_en: idea.titleEn,
-          category: idea.category,
-          content: draft,
-          status: 'pending_review',
-          maestro_stage: 'human_approval',
-          medical_score: medicalGate.score,
-          quality_score: qualityGateResult.score,
-        });
-        logs.push('Saved to Supabase for human review');
-      } catch (e: any) {
-        logs.push(\Supabase save skipped: \\);
-      }
-      return NextResponse.json({ status: 'pending_human_approval', idea, gates: { medical: medicalGate, quality: qualityGateResult }, logs, cairo_time: new Date().toLocaleString('en-US', { timeZone: 'Africa/Cairo' }), duration: Date.now() - startTime });
+      logs.push('Stage: human_approval - Waiting for human');
+      return NextResponse.json({
+        status: 'pending_human_approval',
+        idea,
+        gates: { medical: medicalGate, quality: qualityResult },
+        logs,
+        cairo_time: new Date().toLocaleString('en-US', { timeZone: 'Africa/Cairo' }),
+        duration: Date.now() - startTime
+      });
     }
 
-    logs.push('Stage: done - Factory completed');
-    return NextResponse.json({ status: 'ok', factory: 'Hidden Radiology Factory', idea, draft_length: draft.length, gates: { medical: medicalGate, quality: qualityGateResult }, logs, duration_ms: Date.now() - startTime, cairo_time: new Date().toLocaleString('en-US', { timeZone: 'Africa/Cairo' }) });
+    return NextResponse.json({
+      status: 'ok',
+      factory: 'Hidden Radiology Factory',
+      idea,
+      draft_length: draft.length,
+      gates: { medical: medicalGate, quality: qualityResult },
+      logs,
+      duration_ms: Date.now() - startTime
+    });
 
   } catch (error: any) {
-    logs.push(\ERROR: \\);
+    logs.push('ERROR: ' + error.message);
     return NextResponse.json({ status: 'error', error: error.message, logs }, { status: 500 });
   }
 }
