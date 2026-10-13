@@ -3,10 +3,6 @@
     {
       "path": "/api/cron?key=HRF2026_SECRET",
       "schedule": "0 5 * * *"
-    },
-    {
-      "path": "/api/publish?secret=hr_secret",
-      "schedule": "0 * * * *"
     }
   ]
 }
