@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { generateAndPublish } from "@/app/actions";
-import { Loader2, Shield, CheckCircle, AlertCircle } from "lucide-react";
+import { Loader2, Shield, CheckCircle, AlertCircle, ArrowLeft } from "lucide-react";
+import Link from "next/link";
 
 export default function FactoryPage() {
   const formRef = useRef<HTMLFormElement>(null);
@@ -124,11 +125,20 @@ export default function FactoryPage() {
 
   return (
     <div className="min-h-screen bg-dark p-8 font-cairo">
-      <div className="mx-auto max-w-2xl rounded-lg border border-silver/20 bg-darker p-8 shadow-xl">
-        <div className="mb-8 flex items-center gap-3">
-          <Shield className="h-8 w-8 text-neon" />
-          <h1 className="text-3xl font-bold text-neon">مصنع إنتاج الكتب التلقائي</h1>
+      <div className="mx-auto max-w-2xl">
+        {/* Navigation Header */}
+        <div className="mb-8 flex items-center gap-4">
+          <Link href="/admin" className="flex items-center gap-2 text-silver hover:text-neon transition">
+            <ArrowLeft className="w-5 h-5" />
+            العودة للوحة التحكم
+          </Link>
         </div>
+
+        <div className="rounded-lg border border-silver/20 bg-darker p-8 shadow-xl">
+          <div className="mb-8 flex items-center gap-3">
+            <Shield className="h-8 w-8 text-neon" />
+            <h1 className="text-3xl font-bold text-neon">مصنع إنتاج الكتب التلقائي</h1>
+          </div>
 
         <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -242,6 +252,7 @@ export default function FactoryPage() {
             )}
           </div>
         )}
+        </div>
       </div>
     </div>
   );

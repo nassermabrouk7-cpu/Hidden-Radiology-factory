@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
-import { Loader2, RefreshCw, Shield } from "lucide-react";
+import { Loader2, RefreshCw, Shield, ArrowLeft } from "lucide-react";
+import Link from "next/link";
 
 type MarketingItem = {
   id: string; platform: string; language: string; content_type: string; title: string;
@@ -97,6 +98,14 @@ export default function MarketingAdminPage() {
   return (
     <main dir="rtl" className="min-h-screen bg-[#0A192F] p-4 text-white md:p-8">
       <div className="mx-auto max-w-5xl">
+        {/* Navigation Header */}
+        <div className="mb-8 flex items-center gap-4">
+          <Link href="/admin" className="flex items-center gap-2 text-slate-400 hover:text-[#00E5FF] transition">
+            <ArrowLeft className="w-5 h-5" />
+            العودة للوحة التحكم
+          </Link>
+        </div>
+
         <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div><h1 className="text-3xl font-bold text-[#00E5FF]">محتوى الحملات الإعلانية</h1><p className="mt-2 text-slate-300">آخر 100 مادة إعلانية محفوظة. تبقى المنشورات معلقة حتى توافق عليها.</p></div>
           <button onClick={() => void loadQueue()} disabled={busy} className="flex items-center gap-2 rounded border border-[#00E5FF]/40 px-4 py-2 text-[#00E5FF] disabled:opacity-50">

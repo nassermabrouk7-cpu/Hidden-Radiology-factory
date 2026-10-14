@@ -6,7 +6,18 @@ module.exports = {
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        dark: '#0A192F',
+        darker: '#112240',
+        neon: '#00E5FF',
+        silver: '#8892B0',
+        light: '#CCD6F6',
+      },
+      fontFamily: {
+        cairo: ['Cairo', 'sans-serif'],
+      },
+    },
   },
   plugins: [],
 }

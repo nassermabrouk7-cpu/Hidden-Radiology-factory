@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Shield, CheckCircle, Loader2, AlertCircle, LogOut } from "lucide-react";
+import { Shield, CheckCircle, Loader2, AlertCircle, LogOut, ArrowLeft } from "lucide-react";
+import Link from "next/link";
 
 type Order = {
   id: string;
@@ -113,6 +114,14 @@ export default function AdminOrdersPage() {
   return (
     <div className="min-h-screen bg-[#0A192F] font-cairo text-white p-6">
       <div className="max-w-6xl mx-auto">
+        {/* Navigation Header */}
+        <div className="mb-8 flex items-center gap-4">
+          <Link href="/admin" className="flex items-center gap-2 text-[#8892B0] hover:text-[#00E5FF] transition">
+            <ArrowLeft className="w-5 h-5" />
+            العودة للوحة التحكم
+          </Link>
+        </div>
+
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
