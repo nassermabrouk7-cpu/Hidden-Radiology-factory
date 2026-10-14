@@ -1,0 +1,1 @@
+﻿export default function Page(){ return <div style={{padding:40, background:'black', color:'white', minHeight:'100vh'}}><h1>✅ /maestro شغال (برا /admin)</h1><p>لو ده اشتغل يبقى /admin محجوب بـ middleware</p></div> }
