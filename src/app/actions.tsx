@@ -91,7 +91,6 @@ export async function generateAndPublish(formData: FormData) {
     pdfFileName = newPdfFileName;
 
     const { data: coverData } = supabase.storage.from("covers").getPublicUrl(coverFileName);
-    const { data: pdfData } = supabase.storage.from("pdfs").getPublicUrl(pdfFileName);
     const { data: product, error: insertError } = await supabase.from("products").insert({
       title_ar: titleAr,
       title_en: titleEn,
@@ -100,7 +99,7 @@ export async function generateAndPublish(formData: FormData) {
       category,
       price,
       cover_url: coverData.publicUrl,
-      pdf_url: pdfData.publicUrl,
+      pdf_url: newPdfFileName,
       language,
     }).select("id").single();
     if (insertError || !product) throw new Error("فشل حفظ المنتج في قاعدة البيانات");
