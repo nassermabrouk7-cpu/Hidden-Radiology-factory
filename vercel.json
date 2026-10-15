@@ -1,8 +1,12 @@
-{
+﻿{
   "crons": [
     {
-      "path": "/api/cron?key=HRF2026_SECRET",
-      "schedule": "0 5 * * *"
+      "path": "/api/auto-post",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/auto-post",
+      "schedule": "0 18 * * *"
     }
   ]
 }
