@@ -14,6 +14,7 @@ export async function GET() {
     const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
     const { data: products } = await supabase.from('products').select('id, title_ar, title_en, price, category, cover_url').eq('is_active', true)
     if (!products || products.length === 0) return NextResponse.json({ success: false, error: 'No products' }, { status: 500 })
+    
     const randomProduct = products[Math.floor(Math.random() * products.length)]
     const hookTemplate = hooksTemplates[Math.floor(Math.random() * hooksTemplates.length)]
     const displayTitle = randomProduct.title_ar || randomProduct.title_en
@@ -34,7 +35,7 @@ export async function GET() {
       success: true,
       message: `🚀 ${displayTitle}`,
       campaign: { book: displayTitle, hook: randomHook, price: randomProduct.price, original_price: originalPrice, discount: `${discount}% OFF` },
-      supabase: error ? error.message : 'saved ✅ - بالسعر الحقيقي'
+      supabase: error ? error.message : 'saved ✅ بالسعر الحقيقي من products'
     })
   } catch (e: any) {
     return NextResponse.json({ success: false, error: e.message }, { status: 500 })
