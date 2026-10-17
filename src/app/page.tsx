@@ -14,7 +14,7 @@ export default async function Page(){
     <div style={{minHeight:'100vh', background:'#020617', color:'white', fontFamily:'Cairo, Arial', direction:'rtl'}}>
       <div style={{maxWidth:1100, margin:'0 auto', padding:24}}>
         <div style={{display:'flex', alignItems:'center', gap:16, marginBottom:32, borderBottom:'1px solid #1e293b', paddingBottom:24}}>
-          <img src="/logos/hr-icon.png" alt="HR" style={{width:64, height:64, borderRadius:16}} onError={(e:any)=>e.target.style.display='none'} />
+          <img src="/logos/hr-icon.png" alt="HR" style={{width:64, height:64, borderRadius:16}} />
           <div>
             <h1 style={{margin:0, fontSize:28}}>Hidden Radiology</h1>
             <p style={{margin:0, color:'#38bdf8'}}>الأشعة الخفية - See Beyond The Image</p>
@@ -46,7 +46,7 @@ export default async function Page(){
         </div>
 
         <div style={{marginTop:40, textAlign:'center', opacity:0.6}}>
-          <img src="/logos/logo-ar.png" alt="Hidden Radiology" style={{width:220}} onError={(e:any)=>e.target.style.display='none'} />
+          <img src="/logos/logo-ar.png" alt="Hidden Radiology" style={{width:220}} />
           <p style={{fontSize:12, marginTop:12}}>Hidden Radiology © 2026</p>
         </div>
       </div>
