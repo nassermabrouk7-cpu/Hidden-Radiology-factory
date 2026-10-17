@@ -1,56 +1,43 @@
 ﻿import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-const books = [
-  { id: 'emergency', name: 'أشعة الطوارئ', price: 18.99, stripe: 'price_emergency' },
-  { id: 'chest', name: 'أشعة الصدر', price: 16.99, stripe: 'price_chest' },
-  { id: 'brain', name: 'أشعة المخ', price: 19.99, stripe: 'price_brain' }
-]
-
-const hooks = [
-  'لو بتتلخبط في Emergency... ده هيخلصك!',
-  '90% من الدكاترة بيغلطوا في النقطة دي!',
-  'حالة طوارئ شفتها امبارح - هتغير تفكيرك!',
-  'السر اللي محدش بيقوله عن أشعة الصدر'
+const hooksTemplates = [
+  'لو بتتلخبط في {TITLE}... ده هيخلصك! 🚨',
+  '90% من الدكاترة بيغلطوا في النقطة دي - {TITLE}',
+  'السر اللي محدش بيقوله عن {TITLE}',
+  'حالة شفتها امبارح هتغير تفكيرك في {TITLE}',
+  '{TITLE} - الشرح اللي كنت بتدور عليه'
 ]
 
 export async function GET() {
   try {
-    const randomBook = books[Math.floor(Math.random() * books.length)]
-    const randomHook = hooks[Math.floor(Math.random() * hooks.length)]
-    
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    
-    let supabaseStatus = 'not configured'
-    if (supabaseUrl && supabaseKey) {
-      const supabase = createClient(supabaseUrl, supabaseKey)
-      const { error } = await supabase.from('campaigns').insert({
-        book_id: randomBook.id,
-        hook: randomHook,
-        price: randomBook.price,
-        status: 'generated',
-        created_at: new Date().toISOString()
-      })
-      supabaseStatus = error ? `error: ${error.message}` : 'saved to DB ✅'
-    }
+    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+    const { data: products } = await supabase.from('products').select('id, title_ar, title_en, price, category, cover_url').eq('is_active', true)
+    if (!products || products.length === 0) return NextResponse.json({ success: false, error: 'No products' }, { status: 500 })
+    const randomProduct = products[Math.floor(Math.random() * products.length)]
+    const hookTemplate = hooksTemplates[Math.floor(Math.random() * hooksTemplates.length)]
+    const displayTitle = randomProduct.title_ar || randomProduct.title_en
+    const randomHook = hookTemplate.replace('{TITLE}', displayTitle)
+    const originalPrice = Math.round(randomProduct.price * 1.8 * 100) / 100
+    const discount = Math.round(((originalPrice - randomProduct.price) / originalPrice) * 100)
+
+    const { error } = await supabase.from('campaigns').insert({
+      book_id: randomProduct.id,
+      hook: randomHook,
+      price: randomProduct.price,
+      original_price: originalPrice,
+      discount: discount,
+      status: 'generated'
+    })
 
     return NextResponse.json({
       success: true,
-      message: '🚀 حملة تلقائية اتعملت!',
-      time: new Date().toISOString(),
-      campaign: {
-        book: randomBook.name,
-        hook: randomHook,
-        price: randomBook.price,
-        checkout: `https://hidden-radiology.com/checkout?book=${randomBook.id}`
-      },
-      supabase: supabaseStatus,
-      next_runs: '9am & 6pm Cairo time (via vercel.json crons)'
+      message: `🚀 ${displayTitle}`,
+      campaign: { book: displayTitle, hook: randomHook, price: randomProduct.price, original_price: originalPrice, discount: `${discount}% OFF` },
+      supabase: error ? error.message : 'saved ✅ - بالسعر الحقيقي'
     })
   } catch (e: any) {
     return NextResponse.json({ success: false, error: e.message }, { status: 500 })
   }
 }
-
-export async function POST() { return GET() }
+export async function POST(){ return GET() }
