@@ -5,25 +5,29 @@
     "channel_name": "Radiology و Radiology Hidden",
     "enabled": true
   },
-  "facebook": {
+  "website": {
     "enabled": true,
+    "base_url": "https://hidden-radiology-project-chi.vercel.app"
+  },
+  "facebook": {
+    "enabled": false,
     "via": "metricool"
   },
   "instagram": {
-    "enabled": true,
+    "enabled": false,
     "via": "metricool",
     "username": "radiologyhidden"
   },
   "linkedin": {
-    "enabled": true,
+    "enabled": false,
     "via": "metricool"
   },
   "threads": {
-    "enabled": true,
+    "enabled": false,
     "username": "radiologyhidden"
   },
   "gumroad": {
-    "enabled": true,
+    "enabled": false,
     "connected": true
   },
   "supabase": {
