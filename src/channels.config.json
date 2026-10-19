@@ -1,0 +1,33 @@
+{
+  "telegram": {
+    "chat_id": "-5416713273",
+    "bot_token_env": "TELEGRAM_BOT_TOKEN",
+    "channel_name": "Radiology و Radiology Hidden",
+    "enabled": true
+  },
+  "facebook": {
+    "enabled": true,
+    "via": "metricool"
+  },
+  "instagram": {
+    "enabled": true,
+    "via": "metricool",
+    "username": "radiologyhidden"
+  },
+  "linkedin": {
+    "enabled": true,
+    "via": "metricool"
+  },
+  "threads": {
+    "enabled": true,
+    "username": "radiologyhidden"
+  },
+  "gumroad": {
+    "enabled": true,
+    "connected": true
+  },
+  "supabase": {
+    "enabled": true,
+    "connected": true
+  }
+}
