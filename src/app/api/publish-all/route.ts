@@ -269,8 +269,13 @@ async function handlePublish(request: NextRequest, body: PublishRequest) {
               });
             }
           } else if (channel === 'instagram') {
-            const igAccountId = process.env[channelsConfig.instagram.business_account_id_env];
+            let igAccountId = process.env[channelsConfig.instagram.business_account_id_env];
             const igAccessToken = process.env[channelsConfig.instagram.access_token_env];
+            
+            // Fallback: Instagram Business Account is often the same as Facebook Page ID
+            if (!igAccountId && channelsConfig.facebook?.page_id_env) {
+              igAccountId = process.env[channelsConfig.facebook.page_id_env];
+            }
             
             if (igAccountId && igAccessToken) {
               const igResult = await publishToInstagram(igAccountId, igAccessToken, {
@@ -289,7 +294,7 @@ async function handlePublish(request: NextRequest, body: PublishRequest) {
                 channel: 'instagram',
                 success: false,
                 message: 'Instagram credentials missing',
-                error: 'INSTAGRAM_BUSINESS_ACCOUNT_ID or FACEBOOK_PAGE_ACCESS_TOKEN not configured',
+                error: 'INSTAGRAM_BUSINESS_ACCOUNT_ID or INSTAGRAM_ACCESS_TOKEN not configured',
               });
             }
           } else if (channel === 'threads') {

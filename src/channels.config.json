@@ -12,12 +12,12 @@
   "facebook": {
     "page_id_env": "FACEBOOK_PAGE_ID",
     "access_token_env": "FACEBOOK_PAGE_ACCESS_TOKEN",
-    "enabled": false
+    "enabled": true
   },
   "instagram": {
     "business_account_id_env": "INSTAGRAM_BUSINESS_ACCOUNT_ID",
-    "access_token_env": "FACEBOOK_PAGE_ACCESS_TOKEN",
-    "enabled": false
+    "access_token_env": "INSTAGRAM_ACCESS_TOKEN",
+    "enabled": true
   },
   "linkedin": {
     "organization_id_env": "LINKEDIN_ORGANIZATION_ID",
