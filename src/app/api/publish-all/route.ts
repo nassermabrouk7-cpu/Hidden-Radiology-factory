@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import channelsConfig from '@/channels.config.json';
+import { publishToFacebook } from '@/lib/channels/facebook';
+import { publishToInstagram } from '@/lib/channels/instagram';
+import { publishToThreads } from '@/lib/channels/threads';
+import { publishToLinkedIn } from '@/lib/channels/linkedin';
 
 interface PublishRequest {
   bookId: string;
@@ -237,12 +241,114 @@ async function handlePublish(request: NextRequest, body: PublishRequest) {
     // Disabled networks are reported as skipped; they are never counted as successes.
     for (const channel of ['facebook', 'instagram', 'threads', 'linkedin'] as const) {
       if (channelsConfig[channel]?.enabled) {
-        results.push({
-          channel,
-          success: false,
-          message: `${channel} is enabled in config but has no live adapter`,
-          error: 'A real publishing adapter is not implemented',
-        });
+        // Real publishers with try/catch for each channel
+        try {
+          if (channel === 'facebook') {
+            const fbPageId = process.env[channelsConfig.facebook.page_id_env];
+            const fbAccessToken = process.env[channelsConfig.facebook.access_token_env];
+            
+            if (fbPageId && fbAccessToken) {
+              const fbResult = await publishToFacebook(fbPageId, fbAccessToken, {
+                message: `${body.title_en || body.title_ar}\n\n${body.description_en || body.description_ar}\n\n${buyUrl}`,
+                link: buyUrl,
+                image_url: body.imageUrl,
+              });
+              results.push({
+                channel: 'facebook',
+                success: fbResult.success,
+                message: fbResult.success ? 'Facebook post published' : 'Facebook publishing failed',
+                externalId: fbResult.postId,
+                error: fbResult.error,
+              });
+            } else {
+              results.push({
+                channel: 'facebook',
+                success: false,
+                message: 'Facebook credentials missing',
+                error: 'FACEBOOK_PAGE_ID or FACEBOOK_PAGE_ACCESS_TOKEN not configured',
+              });
+            }
+          } else if (channel === 'instagram') {
+            const igAccountId = process.env[channelsConfig.instagram.business_account_id_env];
+            const igAccessToken = process.env[channelsConfig.instagram.access_token_env];
+            
+            if (igAccountId && igAccessToken) {
+              const igResult = await publishToInstagram(igAccountId, igAccessToken, {
+                imageUrl: body.imageUrl,
+                caption: `${body.title_en || body.title_ar}\n\n${body.description_en || body.description_ar}\n\n${buyUrl}`,
+              });
+              results.push({
+                channel: 'instagram',
+                success: igResult.success,
+                message: igResult.success ? 'Instagram post published' : 'Instagram publishing failed',
+                externalId: igResult.postId,
+                error: igResult.error,
+              });
+            } else {
+              results.push({
+                channel: 'instagram',
+                success: false,
+                message: 'Instagram credentials missing',
+                error: 'INSTAGRAM_BUSINESS_ACCOUNT_ID or FACEBOOK_PAGE_ACCESS_TOKEN not configured',
+              });
+            }
+          } else if (channel === 'threads') {
+            const threadsUserId = process.env[channelsConfig.threads.user_id_env];
+            const threadsAccessToken = process.env[channelsConfig.threads.access_token_env];
+            
+            if (threadsUserId && threadsAccessToken) {
+              const threadsResult = await publishToThreads(threadsUserId, threadsAccessToken, {
+                text: `${body.title_en || body.title_ar}\n\n${body.description_en || body.description_ar}\n\n${buyUrl}`,
+                mediaUrl: body.imageUrl,
+              });
+              results.push({
+                channel: 'threads',
+                success: threadsResult.success,
+                message: threadsResult.success ? 'Threads post published' : 'Threads publishing failed',
+                externalId: threadsResult.postId,
+                error: threadsResult.error,
+              });
+            } else {
+              results.push({
+                channel: 'threads',
+                success: false,
+                message: 'Threads credentials missing',
+                error: 'THREADS_USER_ID or THREADS_ACCESS_TOKEN not configured',
+              });
+            }
+          } else if (channel === 'linkedin') {
+            const linkedinOrgId = process.env[channelsConfig.linkedin.organization_id_env];
+            const linkedinAccessToken = process.env[channelsConfig.linkedin.access_token_env];
+            
+            if (linkedinOrgId && linkedinAccessToken) {
+              const linkedinResult = await publishToLinkedIn(linkedinOrgId, linkedinAccessToken, {
+                text: `${body.title_en || body.title_ar}\n\n${body.description_en || body.description_ar}\n\n${buyUrl}`,
+                link: buyUrl,
+              });
+              results.push({
+                channel: 'linkedin',
+                success: linkedinResult.success,
+                message: linkedinResult.success ? 'LinkedIn post published' : 'LinkedIn publishing failed',
+                externalId: linkedinResult.postId,
+                error: linkedinResult.error,
+              });
+            } else {
+              results.push({
+                channel: 'linkedin',
+                success: false,
+                message: 'LinkedIn credentials missing',
+                error: 'LINKEDIN_ORGANIZATION_ID or LINKEDIN_ACCESS_TOKEN not configured',
+              });
+            }
+          }
+        } catch (error) {
+          results.push({
+            channel,
+            success: false,
+            message: `${channel} publishing failed`,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+        }
       } else {
         skippedChannels.push(channel);
       }

@@ -10,21 +10,24 @@
     "base_url": "https://hidden-radiology-project-chi.vercel.app"
   },
   "facebook": {
-    "enabled": false,
-    "via": "metricool"
+    "page_id_env": "FACEBOOK_PAGE_ID",
+    "access_token_env": "FACEBOOK_PAGE_ACCESS_TOKEN",
+    "enabled": false
   },
   "instagram": {
-    "enabled": false,
-    "via": "metricool",
-    "username": "radiologyhidden"
+    "business_account_id_env": "INSTAGRAM_BUSINESS_ACCOUNT_ID",
+    "access_token_env": "FACEBOOK_PAGE_ACCESS_TOKEN",
+    "enabled": false
   },
   "linkedin": {
-    "enabled": false,
-    "via": "metricool"
+    "organization_id_env": "LINKEDIN_ORGANIZATION_ID",
+    "access_token_env": "LINKEDIN_ACCESS_TOKEN",
+    "enabled": false
   },
   "threads": {
-    "enabled": false,
-    "username": "radiologyhidden"
+    "user_id_env": "THREADS_USER_ID",
+    "access_token_env": "THREADS_ACCESS_TOKEN",
+    "enabled": false
   },
   "gumroad": {
     "enabled": false,
