@@ -1,12 +1,8 @@
 {
   "crons": [
     {
-      "path": "/api/auto-post",
-      "schedule": "0 9 * * *"
-    },
-    {
-      "path": "/api/auto-post",
-      "schedule": "0 18 * * *"
+      "path": "/api/publish-all?auto=true",
+      "schedule": "0 7 * * *"
     }
   ]
 }

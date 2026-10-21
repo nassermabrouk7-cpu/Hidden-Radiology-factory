@@ -1,40 +1,59 @@
-﻿require('dotenv').config({ path: '.env.local' });
-const { createClient } = require('@supabase/supabase-js');
+﻿const { createClient } = require('@supabase/supabase-js');
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-console.log("URL:", url ? "موجود ✅" : "مش موجود ❌");
-console.log("KEY:", key ? "موجود ✅" : "مش موجود ❌");
-
-if (!url || !key) {
-  console.log("\n❌ المفاتيح مش مقروءة - افتح .env.local وشوف:");
+if (!supabaseUrl || !supabaseKey) {
+  console.error('Missing Supabase credentials');
   process.exit(1);
 }
 
-async function check() {
-  const supabase = createClient(url, key);
-  
-  console.log("\n--- الحملات الحالية ---");
-  const { data, error } = await supabase.from('campaigns').select('*').order('created_at', {ascending: false}).limit(10);
-  
-  if (error) { console.log("Error:", error); return; }
-  
-  console.log(`عندك ${data.length} حملات:\n`);
-  data.forEach((c, i) => {
-    console.log(`${i+1}. ${c.book_id} | price: $${c.price} | original: $${c.original_price || 'N/A'} | ${c.hook}`);
-  });
-  
-  console.log("\n--- بتدور على جداول الأسعار الأصلية ---");
-  const tables = ['books', 'products', 'courses', 'ebooks', 'prices'];
-  for (const t of tables) {
-    const { data: d, error: e } = await supabase.from(t).select('*').limit(5);
-    if (!e && d && d.length > 0) {
-      console.log(`\n✅ جدول ${t} موجود:`, JSON.stringify(d, null, 2));
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+async function checkTables() {
+  console.log('Checking Supabase tables...\n');
+
+  // Query information_schema directly
+  const { data: existingTables, error } = await supabase
+    .from('information_schema.tables')
+    .select('table_name')
+    .eq('table_schema', 'public');
+
+  if (error) {
+    console.error('Error querying tables:', error);
+    return;
+  }
+
+  if (existingTables) {
+    console.log('Tables in public schema:');
+    existingTables.forEach(t => console.log(`  - ${t.table_name}`));
+
+    const channelTables = existingTables
+      .map(t => t.table_name)
+      .filter(name => name.includes('channel') || name.includes('campaign') || name.includes('social') || name.includes('telegram') || name.includes('facebook') || name.includes('instagram'));
+
+    if (channelTables.length > 0) {
+      console.log('\nChannel/Campaign related tables:');
+      channelTables.forEach(t => console.log(`  - ${t}`));
     } else {
-      console.log(`- جدول ${t}: ${e ? e.message : 'فاضي'}`);
+      console.log('\nNo channel/campaign tables found');
     }
+  }
+
+  // Check storage buckets
+  console.log('\nChecking storage buckets...');
+  try {
+    const { data: buckets } = await supabase.storage.listBuckets();
+    if (buckets) {
+      console.log('Storage buckets:');
+      buckets.forEach(b => console.log(`  - ${b.name} (public: ${b.public})`));
+    }
+  } catch (e) {
+    console.log('  Could not list buckets (may require different permissions)');
   }
 }
 
-check();
+checkTables().then(() => process.exit(0)).catch(e => {
+  console.error('Error:', e);
+  process.exit(1);
+});

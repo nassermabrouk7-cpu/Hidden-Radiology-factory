@@ -163,7 +163,7 @@ export default function AdminOrdersPage() {
                       ? "bg-green-500/20 text-green-400 border border-green-500/30" 
                       : "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30"
                   }`}>
-                    {order.status === "confirmed" ? "مؤكد" : "بانتظار التأكيد"}
+                    {order.status === "confirmed" ? "مؤكد" : order.payment_method === "paymob" ? "بانتظار تأكيد Paymob" : "بانتظار التأكيد"}
                   </span>
                 </div>
 
@@ -186,7 +186,7 @@ export default function AdminOrdersPage() {
                   </div>
                 </div>
 
-                {order.status === "pending_verification" && (
+                {order.status === "pending_verification" && order.payment_method !== "paymob" && (
                   <button
                     onClick={() => handleConfirm(order.reference_id)}
                     disabled={confirmingId === order.reference_id}

@@ -45,6 +45,12 @@ export async function GET(request: Request) {
       );
     }
 
+    const { data: purchase } = await supabase
+      .from("purchases")
+      .select("status, amount_minor, currency")
+      .eq("reference_id", referenceId)
+      .maybeSingle();
+
     const downloads: Array<{ title: string; url: string }> = [];
 
     if (order.status === "confirmed") {
@@ -130,6 +136,9 @@ export async function GET(request: Request) {
           referenceId: order.reference_id,
           status: order.status,
           totalAmount: Number(order.total_amount) || 0,
+          paymentStatus: purchase?.status || null,
+          paymentAmount: purchase ? Number(purchase.amount_minor) / 100 : null,
+          paymentCurrency: purchase?.currency || null,
           downloads,
         },
       },

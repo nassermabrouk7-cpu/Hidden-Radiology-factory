@@ -1,3 +1,5 @@
+import { getFacebookCredentialError } from '@/lib/facebook-credentials';
+
 interface FacebookPostData {
   message: string;
   link?: string;
@@ -16,6 +18,9 @@ export async function publishToFacebook(
   data: FacebookPostData
 ): Promise<FacebookPublishResult> {
   try {
+    const credentialError = getFacebookCredentialError(pageId, accessToken);
+    if (credentialError) return { success: false, error: credentialError };
+
     const url = `https://graph.facebook.com/${pageId}/feed`;
 
     const body: any = {
@@ -59,3 +64,4 @@ export async function publishToFacebook(
     };
   }
 }
+

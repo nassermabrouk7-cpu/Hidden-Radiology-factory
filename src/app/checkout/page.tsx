@@ -6,7 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useCart } from "@/context/CartContext";
 import { useLanguage } from "@/context/LanguageContext";
-import { CreditCard, Smartphone, Wallet, Shield, CheckCircle, Loader2, Copy, MessageCircle, AlertCircle } from "lucide-react";
+import { CreditCard, Wallet, Shield, CheckCircle, Loader2, MessageCircle, AlertCircle } from "lucide-react";
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -21,6 +21,12 @@ export default function CheckoutPage() {
   const [referenceId, setReferenceId] = useState("");
   const [orderTotal, setOrderTotal] = useState(0);
   const [emailError, setEmailError] = useState("");
+  const paymobCurrency = process.env.NEXT_PUBLIC_PAYMOB_CURRENCY || "EGP";
+  const paymobMultiplier = Number(process.env.NEXT_PUBLIC_PAYMOB_AMOUNT_MULTIPLIER || 0);
+  const paymobReady = Number.isFinite(paymobMultiplier) && paymobMultiplier > 0;
+  const formatPaymobAmount = (amount: number) => new Intl.NumberFormat(lang === "ar" ? "ar-EG" : "en-EG", {
+    style: "currency", currency: paymobCurrency, maximumFractionDigits: 2,
+  }).format(amount * paymobMultiplier);
 
   useEffect(() => {
     if (items.length === 0 && !orderCreated) router.push("/library");
@@ -34,16 +40,12 @@ export default function CheckoutPage() {
   };
 
   const paymentOptions = [
-    { id: "instapay", name: isRTL ? "إنستا باي" : "Instapay", number: "01002293344", icon: Smartphone, color: "bg-purple-600" },
-    { id: "vodafone", name: isRTL ? "فودافون كاش + فوري" : "Vodafone Cash & Fawry", number: "01002293344", icon: Smartphone, color: "bg-red-600" },
-    { id: "etisalat", name: isRTL ? "اتصالات كاش" : "Etisalat Cash", number: "01115440838", icon: Smartphone, color: "bg-green-600" },
+    { id: "instapay", name: isRTL ? "إنستا باي" : "InstaPay", number: "01002293344", icon: Wallet, color: "bg-purple-600" },
+    { id: "vodafone", name: isRTL ? "فودافون كاش + فوري" : "Vodafone Cash & Fawry", number: "01002293344", icon: Wallet, color: "bg-red-600" },
+    { id: "etisalat", name: isRTL ? "اتصالات كاش" : "Etisalat Cash", number: "01115440838", icon: Wallet, color: "bg-green-600" },
+    { id: "paymob", name: "Paymob — Card / Wallet", number: "Secure hosted checkout", icon: CreditCard, color: "bg-blue-600" },
     { id: "paypal", name: "PayPal", number: "paypal.me/NasserMabrouk", icon: CreditCard, color: "bg-blue-600" },
   ];
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    alert(isRTL ? "تم النسخ!" : "Copied!");
-  };
 
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,7 +56,8 @@ export default function CheckoutPage() {
 
     setLoading(true);
     try {
-      const response = await fetch("/api/orders/create", {
+      const isPaymob = paymentMethod === "paymob";
+      const response = await fetch(isPaymob ? "/api/checkout" : "/api/orders/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -70,6 +73,13 @@ export default function CheckoutPage() {
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || "فشل إنشاء الطلب");
+      }
+
+      if (isPaymob) {
+        const paymobCheckout: { checkoutUrl?: string } = await response.json();
+        if (!paymobCheckout.checkoutUrl) throw new Error(isRTL ? "تعذر بدء الدفع عبر Paymob" : "Paymob checkout URL is missing");
+        window.location.assign(paymobCheckout.checkoutUrl);
+        return;
       }
 
       const createdOrder: { referenceId?: string; totalAmount?: number } = await response.json();
@@ -95,7 +105,7 @@ export default function CheckoutPage() {
 
     return (
       <div dir={isRTL ? "rtl" : "ltr"} className="min-h-screen bg-[#0A192F] text-white font-sans flex items-center justify-center p-4">
-        <div className="bg-[#112240] p-6 md:p-8 rounded-2xl border border-[#00E5FF]/30 text-center max-w-lg w-full space-y-6">
+        <div className="bg-[#112240] p-4 sm:p-6 md:p-8 rounded-2xl border border-[#00E5FF]/30 text-center max-w-lg w-full space-y-4 sm:space-y-6">
           <div className="w-20 h-20 mx-auto bg-green-500/20 rounded-full flex items-center justify-center">
             <CheckCircle className="w-10 h-10 text-green-400" />
           </div>
@@ -108,7 +118,9 @@ export default function CheckoutPage() {
               {isRTL ? "الخطوة الأخيرة:" : "Final Step:"}
             </h3>
             <p className="text-sm text-[#8892B0]">
-              {paymentMethod === "paypal" 
+              {paymentMethod === "paymob"
+                ? (isRTL ? "أكمل الدفع في صفحة Paymob الآمنة" : "Complete payment on Paymob's secure checkout")
+                : paymentMethod === "paypal"
                 ? (isRTL ? "أكمل الدفع عبر PayPal ثم أرسل الإيصال" : "Complete PayPal payment then send receipt")
                 : (isRTL ? `حول لـ ${selectedMethod?.number} وأرسل الصورة` : `Transfer to ${selectedMethod?.number} and send screenshot`)
               }
@@ -120,7 +132,7 @@ export default function CheckoutPage() {
               href={`https://paypal.me/NasserMabrouk/${orderTotal.toFixed(2)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="block w-full rounded-xl bg-blue-600 py-4 font-bold text-white"
+              className="block w-full rounded-xl bg-blue-600 py-3 sm:py-4 font-bold text-white min-h-[48px]"
             >
               {isRTL ? `الدفع عبر PayPal — $${orderTotal.toFixed(2)}` : `Pay with PayPal — $${orderTotal.toFixed(2)}`}
             </a>
@@ -128,7 +140,7 @@ export default function CheckoutPage() {
 
           <Link
             href={`/order/${encodeURIComponent(referenceId)}?method=${encodeURIComponent(paymentMethod)}&lang=${lang}`}
-            className="block text-sm text-[#00E5FF] underline"
+            className="block text-sm text-[#00E5FF] underline py-2"
           >
             {isRTL ? "متابعة حالة الطلب والتنزيل بعد التأكيد" : "Track your order and download after confirmation"}
           </Link>
@@ -137,7 +149,7 @@ export default function CheckoutPage() {
             href={`https://wa.me/201115440838?text=${encodeURIComponent(whatsappMessage)}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="w-full py-4 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition-all flex items-center justify-center gap-2"
+            className="w-full py-3 sm:py-4 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition-all flex items-center justify-center gap-2 min-h-[48px]"
           >
             <MessageCircle className="w-5 h-5" />
             {isRTL ? "إرسال عبر واتساب" : "Send via WhatsApp"}
@@ -157,7 +169,7 @@ export default function CheckoutPage() {
         <div className="text-center mb-6 md:mb-8">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#00E5FF]/10 border border-[#00E5FF]/30 text-[#00E5FF] text-sm mb-4">
             <Shield className="w-4 h-4" />
-            <span>{isRTL ? "دفع آمن - 4 وسائل" : "4 Payment Methods"}</span>
+              <span>{isRTL ? "اختر وسيلة الدفع المناسبة" : "Choose a payment method"}</span>
           </div>
           <h1 className="text-2xl md:text-3xl font-bold mb-2">{isRTL ? "إتمام الشراء" : "Checkout"}</h1>
         </div>
@@ -171,14 +183,20 @@ export default function CheckoutPage() {
                   <Image src={item.cover_url} alt={isRTL ? item.title_ar : item.title_en} width={64} height={80} className="w-16 h-20 object-cover rounded flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <h3 className="font-bold text-sm line-clamp-2">{isRTL ? item.title_ar : item.title_en}</h3>
-                    <p className="text-[#00E5FF] font-bold mt-1">${item.price} × {item.quantity}</p>
+                    <p className="text-[#00E5FF] font-bold mt-1">
+                      {paymentMethod === "paymob" && paymobReady
+                        ? `${formatPaymobAmount(item.price)} × ${item.quantity}`
+                        : `$${item.price} × ${item.quantity}`}
+                    </p>
                   </div>
                 </div>
               ))}
             </div>
             <div className="border-t border-[#8892B0]/20 pt-4 flex items-center justify-between">
               <span className="text-lg font-bold">{isRTL ? "الإجمالي" : "Total"}</span>
-              <span className="text-2xl font-black text-[#00E5FF]">${totalPrice.toFixed(2)}</span>
+              <span className="text-2xl font-black text-[#00E5FF]">
+                {paymentMethod === "paymob" && paymobReady ? formatPaymobAmount(totalPrice) : `$${totalPrice.toFixed(2)}`}
+              </span>
             </div>
           </div>
 
@@ -204,6 +222,14 @@ export default function CheckoutPage() {
                 })}
               </div>
 
+              {paymentMethod === "paymob" && (
+                <p className={`text-xs ${paymobReady ? "text-[#8892B0]" : "text-amber-300"}`}>
+                  {paymobReady
+                    ? (isRTL ? `سيتم التحصيل بعملة ${paymobCurrency}. يُطبّق معامل التحويل ${paymobMultiplier} على أسعار الكتالوج بالدولار.` : `Charged in ${paymobCurrency}. The configured ${paymobMultiplier} rate is applied to catalog prices in USD.`)
+                    : (isRTL ? "الدفع عبر Paymob غير مهيأ بعد. اختر وسيلة دفع يدوية أو أكمل إعداد Paymob." : "Paymob is not configured yet. Choose a manual method or finish Paymob setup.")}
+                </p>
+              )}
+
               <div className="space-y-3 pt-4 border-t border-[#8892B0]/20">
                 <input type="text" required value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder={isRTL ? "الاسم الكامل" : "Full Name"} className="w-full bg-[#0A192F] border border-[#8892B0]/30 rounded-lg p-3 text-white focus:border-[#00E5FF] outline-none" />
                 <div>
@@ -213,21 +239,7 @@ export default function CheckoutPage() {
                 <input type="tel" required value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} placeholder={isRTL ? "رقم الهاتف" : "Phone Number"} className="w-full bg-[#0A192F] border border-[#8892B0]/30 rounded-lg p-3 text-white focus:border-[#00E5FF] outline-none" />
               </div>
 
-              {(paymentMethod === "instapay" || paymentMethod === "vodafone" || paymentMethod === "etisalat") && (
-                <div className="bg-[#0A192F] p-4 rounded-xl border border-[#8892B0]/20 space-y-2">
-                  <p className="text-sm text-[#8892B0]">{isRTL ? "رقم التحويل:" : "Transfer to:"}</p>
-                  <div className="flex items-center justify-between bg-[#112240] p-3 rounded-lg">
-                    <span className="text-lg md:text-xl font-bold text-[#00E5FF] font-mono">
-                      {paymentOptions.find(p => p.id === paymentMethod)?.number}
-                    </span>
-                    <button type="button" onClick={() => copyToClipboard(paymentOptions.find(p => p.id === paymentMethod)?.number || "")} className="p-2 hover:bg-[#00E5FF]/20 rounded-lg text-[#00E5FF]">
-                      <Copy className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <button type="submit" disabled={loading || !!emailError} className="w-full bg-[#00E5FF] text-[#0A192F] font-bold py-4 rounded-xl hover:bg-[#00b8cc] transition-all disabled:opacity-50 flex items-center justify-center gap-2 mt-6">
+              <button type="submit" disabled={loading || !!emailError || (paymentMethod === "paymob" && !paymobReady)} className="w-full bg-[#00E5FF] text-[#0A192F] font-bold py-3 sm:py-4 rounded-xl hover:bg-[#00b8cc] transition-all disabled:opacity-50 flex items-center justify-center gap-2 mt-4 sm:mt-6 min-h-[48px]">
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
                 {loading ? (isRTL ? "جاري..." : "Processing...") : (isRTL ? "تأكيد الطلب" : "Confirm Order")}
               </button>

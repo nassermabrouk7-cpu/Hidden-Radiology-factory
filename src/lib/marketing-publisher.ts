@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { isMarketingItemPublishAuthorized } from "@/lib/marketing-auth";
 import { getTrustedProductCoverUrl } from "@/lib/marketing-media";
+import { getFacebookCredentialError } from "@/lib/facebook-credentials";
 
 type Platform = "instagram" | "facebook" | "linkedin";
 
@@ -110,11 +111,11 @@ async function publishToFacebook(
   const pageId = process.env.FACEBOOK_PAGE_ID;
   const accessToken = process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
 
-  if (!pageId || !accessToken) {
+  const credentialError = getFacebookCredentialError(pageId, accessToken);
+  if (credentialError || !pageId || !accessToken) {
     return {
       success: false,
-      error:
-        "Facebook publisher is not configured. Missing FACEBOOK_PAGE_ID or FACEBOOK_PAGE_ACCESS_TOKEN.",
+      error: credentialError || "Facebook publisher is not configured.",
     };
   }
 
@@ -614,7 +615,7 @@ export async function publishNextMarketingItem(): Promise<{
   const configuredPlatforms: Platform[] = isMetricoolEnabled()
     ? (process.env.METRICOOL_PLATFORMS || "facebook,instagram,linkedin").split(",").map((value) => value.trim()).filter((value): value is Platform => ["facebook", "instagram", "linkedin"].includes(value as Platform))
     : (["instagram", "facebook", "linkedin"] as Platform[]).filter((platform) => {
-        if (platform === "facebook") return Boolean(process.env.FACEBOOK_PAGE_ID && process.env.FACEBOOK_PAGE_ACCESS_TOKEN);
+        if (platform === "facebook") return !getFacebookCredentialError(process.env.FACEBOOK_PAGE_ID, process.env.FACEBOOK_PAGE_ACCESS_TOKEN);
         if (platform === "instagram") return Boolean(process.env.INSTAGRAM_USER_ID && process.env.INSTAGRAM_ACCESS_TOKEN);
         return Boolean(process.env.LINKEDIN_ACCESS_TOKEN && process.env.LINKEDIN_AUTHOR_URN);
       });

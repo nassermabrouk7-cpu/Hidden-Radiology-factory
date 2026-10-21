@@ -1,5 +1,5 @@
-﻿import type { Metadata } from "next";
-import { Inter, Cairo } from "next/font/google";
+﻿import type { Metadata, Viewport } from "next";
+import { Cairo } from "next/font/google";
 import Script from "next/script";
 import { LanguageProvider } from "@/context/LanguageContext";
 import { CartProvider } from "@/context/CartContext";
@@ -7,11 +7,11 @@ import CartDrawer from "@/components/CartDrawer";
 import "./globals.css";
 
 // إعداد الخطوط
-const inter = Inter({ subsets: ["latin"] });
-const cairo = Cairo({ 
+const cairo = Cairo({
   subsets: ["arabic", "latin"],
   weight: ["400", "600", "700", "900"],
   variable: "--font-cairo",
+  display: "swap",
 });
 
 // بيانات SEO والتحقق
@@ -25,6 +25,13 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: "#0A192F",
+};
+
 export default function RootLayout({
   children,
 }: {
@@ -32,7 +39,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ar" dir="rtl" className="dark">
-      <body className={`${inter.className} ${cairo.variable} bg-dark text-silver`}>
+      <body className={`${cairo.variable} bg-dark text-silver`}>
         
         {/* 1. Google Analytics (مهم جداً لمتابعة الزوار) */}
         <Script

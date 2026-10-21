@@ -8,6 +8,9 @@ type OrderStatus = {
   referenceId: string;
   status: string;
   totalAmount: number;
+  paymentStatus?: string | null;
+  paymentAmount?: number | null;
+  paymentCurrency?: string | null;
   downloads: Array<{ title: string; url: string }>;
 };
 
@@ -59,7 +62,7 @@ export default function OrderStatusPage() {
           <p role="alert" className="text-red-300">{error}</p>
         ) : confirmed ? (
           <div className="space-y-4">
-            <p className="font-semibold text-green-300">{isArabic ? "تم التحقق من الدفع. ملفاتك جاهزة." : "Payment verified. Your files are ready."}</p>
+            <p className="font-semibold text-green-300">{isArabic ? "تم تأكيد الدفع. ملفاتك جاهزة." : "Payment confirmed. Your files are ready."}</p>
             {order.downloads.map((download) => (
               <a key={download.url} href={download.url} className="block rounded-xl bg-[#00E5FF] px-5 py-4 font-bold text-[#0A192F]" rel="noreferrer">
                 {isArabic ? "تنزيل" : "Download"} — {download.title}
@@ -69,8 +72,18 @@ export default function OrderStatusPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            <p className="text-yellow-200">{isArabic ? "طلبك بانتظار مراجعة إثبات الدفع من الإدارة." : "Your order is waiting for payment verification."}</p>
-            {order && <p className="text-sm text-[#8892B0]">{isArabic ? "الإجمالي" : "Total"}: ${Number(order.totalAmount).toFixed(2)}</p>}
+            <p className="text-yellow-200">
+              {order?.paymentStatus === "failed"
+                ? (isArabic ? "لم يكتمل الدفع. يمكنك إعادة المحاولة من صفحة المكتبة." : "Payment did not complete. You can retry from the library.")
+                : order?.paymentStatus === null
+                  ? (isArabic ? "طلبك بانتظار مراجعة الدفع اليدوي من الإدارة." : "Your manual payment is waiting for administrator review.")
+                  : (isArabic ? "طلبك بانتظار تأكيد الدفع. ستتحدث الحالة تلقائيًا بعد وصول تأكيد Paymob." : "Payment confirmation is pending. This page updates automatically after Paymob confirms it.")}
+            </p>
+            {order && <p className="text-sm text-[#8892B0]">
+              {isArabic ? "الإجمالي" : "Total"}: {order.paymentAmount != null && order.paymentCurrency
+                ? new Intl.NumberFormat(isArabic ? "ar-EG" : "en-EG", { style: "currency", currency: order.paymentCurrency }).format(order.paymentAmount)
+                : `$${Number(order.totalAmount).toFixed(2)}`}
+            </p>}
             <p className="text-xs text-[#8892B0]">{isArabic ? "تتحدث الحالة تلقائياً كل 15 ثانية." : "This page refreshes automatically every 15 seconds."}</p>
           </div>
         )}

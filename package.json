@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node --test",
+    "test": "node --test tests",
     "lint": "eslint src/app src/components src/context src/lib"
   },
   "dependencies": {
