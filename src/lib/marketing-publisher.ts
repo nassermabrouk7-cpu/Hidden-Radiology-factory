@@ -39,7 +39,9 @@ function isMetricoolEnabled(): boolean {
 }
 
 function sanitizeError(value: unknown): string {
-  let message = typeof value === "string" ? value : "Unknown publishing error";
+  if (typeof value !== "string" || !value) return "";
+
+  let message = value;
   for (const secret of [process.env.METRICOOL_API_TOKEN, process.env.FACEBOOK_PAGE_ACCESS_TOKEN, process.env.INSTAGRAM_ACCESS_TOKEN, process.env.LINKEDIN_ACCESS_TOKEN, process.env.CRON_SECRET, process.env.SUPABASE_SERVICE_ROLE_KEY]) {
     if (secret) message = message.split(secret).join("[REDACTED]");
   }
@@ -682,7 +684,18 @@ export async function publishNextMarketingItem(): Promise<{
   }
   if (!claimedItem) return { processed: false };
 
-  const result = await publishContent(typedContent);
+  let result: PublishResult;
+  try {
+    result = await publishContent(typedContent);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "";
+    result = {
+      success: false,
+      error: detail
+        ? `Publishing request failed; verify the platform before retrying. ${detail}`
+        : "Publishing request failed; verify the platform before retrying.",
+    };
+  }
 
   if (result.success) {
     const { error: successError } = await supabase

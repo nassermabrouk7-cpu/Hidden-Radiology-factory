@@ -15,11 +15,12 @@ export async function POST(request: NextRequest) {
 
   try {
     const result = await publishNextMarketingItem();
+    const success = result.success !== false && !result.error;
 
-    return NextResponse.json({
-      success: true,
-      ...result,
-    });
+    return NextResponse.json(
+      { ...result, success },
+      { status: success ? 200 : 502 },
+    );
   } catch (error) {
     const message =
       error instanceof Error

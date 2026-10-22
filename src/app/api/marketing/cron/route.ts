@@ -87,9 +87,14 @@ export async function GET(request: NextRequest) {
       };
     }
 
+    // Publishing stays deliberately gated by MARKETING_AUTO_PUBLISH. A disabled
+    // gate is an expected skip, while an actual failed publishing attempt is an error.
+    const publishingSucceeded = publishResult.success !== false;
+    const success = generateResponse.ok && publishingSucceeded;
+
     return NextResponse.json(
       {
-        success: generateResponse.ok,
+        success,
         generation: {
           status: generateResponse.status,
           result: generateResult,
@@ -97,7 +102,11 @@ export async function GET(request: NextRequest) {
         publishing: publishResult,
       },
       {
-        status: generateResponse.ok ? 200 : generateResponse.status,
+        status: !generateResponse.ok
+          ? generateResponse.status
+          : publishingSucceeded
+            ? 200
+            : 502,
       }
     );
   } catch (error) {
