@@ -15,9 +15,19 @@ const bookNames: Record<string, string> = {
 }
 
 export default async function Page(){
-  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-  const { data } = await supabase.from('campaigns').select('*').order('created_at', {ascending: false}).limit(50)
-  const campaigns = (data ?? []) as CampaignRow[];
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  let campaigns: CampaignRow[] = [];
+
+  if (supabaseUrl && serviceRoleKey) {
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const { data } = await supabase
+      .from('campaigns')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    campaigns = (data ?? []) as CampaignRow[];
+  }
   
   return (
     <div style={{minHeight:'100vh', background:'#020617', color:'white', fontFamily:'Cairo, Arial', direction:'rtl'}}>
