@@ -12,6 +12,8 @@ env_temp.txt
 
 # Local repair backups and scratch artifacts
 .repair-backups/
+/.repair-backups
+/.repair-backups/**
 Auto-Fix-From-Vercel.js
 Auto-Publisher-INSIDE-PROJECT.js
 fix*.js
