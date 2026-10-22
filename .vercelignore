@@ -1,0 +1,22 @@
+# Environment files, private keys, and local project credentials
+.env*
+*.pem
+*.key
+service_key.txt
+hr_secret.txt
+cron.txt
+env_temp.txt
+
+# Local Vercel metadata
+.vercel/
+
+# Local repair backups and scratch artifacts
+.repair-backups/
+Auto-Fix-From-Vercel.js
+Auto-Publisher-INSIDE-PROJECT.js
+fix*.js
+fix*.ps1
+page_id.txt
+payload.json
+temp.js
+get_id.js

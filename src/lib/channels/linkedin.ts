@@ -9,6 +9,29 @@ interface LinkedInPublishResult {
   error?: string;
 }
 
+interface LinkedInMedia {
+  status: 'READY';
+  description: { text: string };
+  originalUrl: string;
+}
+
+interface LinkedInShareContent {
+  shareCommentary: { text: string };
+  shareMediaCategory: 'NONE' | 'ARTICLE';
+  media?: LinkedInMedia[];
+}
+
+interface LinkedInPostPayload {
+  author: string;
+  lifecycleState: 'PUBLISHED';
+  specificContent: {
+    'com.linkedin.ugc.ShareContent': LinkedInShareContent;
+  };
+  visibility: {
+    'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC';
+  };
+}
+
 export async function publishToLinkedIn(
   organizationId: string,
   accessToken: string,
@@ -18,7 +41,7 @@ export async function publishToLinkedIn(
     const url = 'https://api.linkedin.com/v2/ugcPosts';
 
     // Build the post content
-    const content: any = {
+    const content: LinkedInPostPayload = {
       author: `urn:li:organization:${organizationId}`,
       lifecycleState: 'PUBLISHED',
       specificContent: {
@@ -36,8 +59,9 @@ export async function publishToLinkedIn(
 
     // Add link if provided
     if (data.link) {
-      content.specificContent['com.linkedin.ugc.ShareContent'].shareMediaCategory = 'ARTICLE';
-      content.specificContent['com.linkedin.ugc.ShareContent'].media = [
+      const shareContent = content.specificContent['com.linkedin.ugc.ShareContent'];
+      shareContent.shareMediaCategory = 'ARTICLE';
+      shareContent.media = [
         {
           status: 'READY',
           description: {
@@ -58,23 +82,24 @@ export async function publishToLinkedIn(
       body: JSON.stringify(content),
     });
 
-    const result = await response.json();
+    const result = await response.json().catch(() => ({}));
 
-    if (result.error) {
+    const postId = response.headers.get('x-restli-id') || result.id;
+    if (!response.ok || result.error || typeof postId !== 'string' || !postId) {
       return {
         success: false,
-        error: result.error.message || 'LinkedIn API error',
+        error: String(result.error?.message || `LinkedIn API returned HTTP ${response.status}.`).split(accessToken).join('[REDACTED]').slice(0, 300),
       };
     }
 
     return {
       success: true,
-      postId: result.id,
+      postId,
     };
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: error instanceof Error ? error.message.split(accessToken).join('[REDACTED]').slice(0, 300) : 'Unknown error',
     };
   }
 }

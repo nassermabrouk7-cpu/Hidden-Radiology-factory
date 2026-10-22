@@ -9,6 +9,13 @@ interface ThreadsPublishResult {
   error?: string;
 }
 
+interface ThreadsCreateBody {
+  media_type: 'TEXT' | 'IMAGE';
+  text: string;
+  access_token: string;
+  image_url?: string;
+}
+
 export async function publishToThreads(
   userId: string,
   accessToken: string,
@@ -17,7 +24,7 @@ export async function publishToThreads(
   try {
     const url = `https://graph.threads.net/v1.0/${userId}/threads`;
 
-    const body: any = {
+    const body: ThreadsCreateBody = {
       media_type: 'TEXT',
       text: data.text,
       access_token: accessToken,
@@ -34,12 +41,12 @@ export async function publishToThreads(
       body: JSON.stringify(body),
     });
 
-    const result = await response.json();
+    const result = await response.json().catch(() => ({}));
 
-    if (result.error) {
+    if (!response.ok || result.error || typeof result.id !== 'string' || !result.id) {
       return {
         success: false,
-        error: result.error.message || 'Threads API error',
+        error: String(result.error?.message || `Threads API returned HTTP ${response.status}.`).split(accessToken).join('[REDACTED]').slice(0, 300),
       };
     }
 
@@ -58,12 +65,12 @@ export async function publishToThreads(
       body: JSON.stringify(publishBody),
     });
 
-    const publishResult = await publishResponse.json();
+    const publishResult = await publishResponse.json().catch(() => ({}));
 
-    if (publishResult.error) {
+    if (!publishResponse.ok || publishResult.error || typeof publishResult.id !== 'string' || !publishResult.id) {
       return {
         success: false,
-        error: `Publish failed: ${publishResult.error.message}`,
+        error: String(publishResult.error?.message || `Threads publish returned HTTP ${publishResponse.status}.`).split(accessToken).join('[REDACTED]').slice(0, 300),
       };
     }
 
@@ -74,7 +81,7 @@ export async function publishToThreads(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: error instanceof Error ? error.message.split(accessToken).join('[REDACTED]').slice(0, 300) : 'Unknown error',
     };
   }
 }

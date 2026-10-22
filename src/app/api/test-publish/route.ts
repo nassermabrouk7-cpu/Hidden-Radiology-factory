@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import channelsConfig from '@/channels.config.json';
 import { publishToFacebook } from '@/lib/channels/facebook';
 import { publishToInstagram } from '@/lib/channels/instagram';
 import { publishToThreads } from '@/lib/channels/threads';
 import { publishToLinkedIn } from '@/lib/channels/linkedin';
+import { isCronBearerAuthorized } from '@/lib/marketing-auth';
+import { getFacebookCredentialError } from '@/lib/facebook-credentials';
 
 interface PublishRequest {
   bookId?: string;
@@ -16,6 +17,7 @@ interface PublishRequest {
   title_ar?: string;
   title_en?: string;
   channels?: string[]; // Optional: specify which channels to test
+  dryRun?: boolean;
 }
 
 interface PublishResult {
@@ -24,6 +26,15 @@ interface PublishResult {
   message: string;
   externalId?: string;
   error?: string;
+}
+
+function safeError(value: unknown): string {
+  let message = typeof value === 'string' ? value : 'Unknown publishing error';
+  for (const name of ['TELEGRAM_BOT_TOKEN', 'FACEBOOK_PAGE_ACCESS_TOKEN', 'INSTAGRAM_ACCESS_TOKEN', 'THREADS_ACCESS_TOKEN', 'LINKEDIN_ACCESS_TOKEN', 'CRON_SECRET', 'SUPABASE_SERVICE_ROLE_KEY']) {
+    const secret = process.env[name];
+    if (secret) message = message.split(secret).join('[REDACTED]');
+  }
+  return message.slice(0, 300);
 }
 
 // Telegram publisher
@@ -44,7 +55,6 @@ async function publishToTelegram(
           chat_id: chatId,
           photo: imageUrl,
           caption: caption.substring(0, 1024),
-          parse_mode: 'HTML',
           reply_markup: {
             inline_keyboard: [[
               {
@@ -59,12 +69,13 @@ async function publishToTelegram(
 
     const photoData = await photoResponse.json();
 
-    if (!photoData.ok) {
+    const messageId = photoData?.result?.message_id;
+    if (!photoResponse.ok || photoData?.ok !== true || (typeof messageId !== 'number' && typeof messageId !== 'string')) {
       return {
         channel: 'telegram',
         success: false,
         message: 'Failed to send photo',
-        error: photoData.description || 'Telegram API error'
+        error: String(photoData.description || `Telegram API returned HTTP ${photoResponse.status}.`).split(botToken).join('[REDACTED]').slice(0, 300)
       };
     }
 
@@ -72,19 +83,22 @@ async function publishToTelegram(
       channel: 'telegram',
       success: true,
       message: 'Photo sent successfully',
-      externalId: photoData.result.message_id.toString()
+      externalId: String(messageId)
     };
   } catch (error) {
     return {
       channel: 'telegram',
       success: false,
       message: 'Telegram publishing failed',
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message.split(botToken).join('[REDACTED]').slice(0, 300) : 'Unknown error'
     };
   }
 }
 
 export async function POST(request: NextRequest) {
+  if (!isCronBearerAuthorized(request)) {
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+  }
   try {
     const body: PublishRequest = await request.json();
     const testChannels = body.channels || ['telegram']; // Default to telegram only
@@ -101,6 +115,33 @@ export async function POST(request: NextRequest) {
 
     const buyUrl = `https://hidden-radiology-project-chi.vercel.app/library?book=${bookId}`;
     const caption = description_ar || description_en || '';
+
+    if (body.dryRun === true) {
+      const preview = testChannels.map((channel) => {
+        const enabled = channel === 'telegram' ? Boolean(channelsConfig.telegram?.enabled)
+          : channel === 'facebook' ? Boolean(channelsConfig.facebook?.enabled)
+          : channel === 'instagram' ? Boolean(channelsConfig.instagram?.enabled)
+          : channel === 'threads' ? Boolean(channelsConfig.threads?.enabled)
+          : channel === 'linkedin' ? Boolean(channelsConfig.linkedin?.enabled)
+          : false;
+        let configured = false;
+        if (channel === 'telegram') configured = Boolean(process.env.TELEGRAM_BOT_TOKEN);
+        if (channel === 'facebook') configured = !getFacebookCredentialError(process.env.FACEBOOK_PAGE_ID, process.env.FACEBOOK_PAGE_ACCESS_TOKEN);
+        if (channel === 'instagram') configured = Boolean(process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID && process.env.INSTAGRAM_ACCESS_TOKEN);
+        if (channel === 'threads') configured = Boolean(process.env.THREADS_USER_ID && process.env.THREADS_ACCESS_TOKEN);
+        if (channel === 'linkedin') configured = Boolean(process.env.LINKEDIN_ORGANIZATION_ID && process.env.LINKEDIN_ACCESS_TOKEN);
+        return { channel, enabled, configured, status: !enabled ? 'disabled' : configured ? 'would_publish' : 'not_configured' };
+      });
+      return NextResponse.json({
+        success: true,
+        dryRun: true,
+        product: { bookId, title: title_en || title_ar, price },
+        imageUrl,
+        destination: buyUrl,
+        channels: preview,
+        externalPostsCreated: false,
+      });
+    }
 
     const results: PublishResult[] = [];
 
@@ -312,7 +353,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: safeError(error instanceof Error ? error.message : undefined)
       },
       { status: 500 }
     );
@@ -320,9 +361,12 @@ export async function POST(request: NextRequest) {
 }
 
 // GET endpoint for quick browser test
-export async function GET() {
+export async function GET(request: NextRequest) {
+  if (!isCronBearerAuthorized(request)) {
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+  }
   return NextResponse.json({
-    message: 'Test endpoint ready. Use POST to publish.',
+    message: 'Test endpoint ready. Authorized POST requests may set dryRun: true to preview without publishing.',
     usage: {
       method: 'POST',
       body: {
@@ -348,8 +392,6 @@ export async function GET() {
       instagram: channelsConfig.instagram?.enabled || false,
       threads: channelsConfig.threads?.enabled || false,
       linkedin: channelsConfig.linkedin?.enabled || false,
-      chatId: channelsConfig.telegram?.chat_id || 'not configured',
-      channelName: channelsConfig.telegram?.channel_name || 'not configured'
     }
   });
 }

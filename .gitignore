@@ -54,3 +54,11 @@ temp.js
 get_id.js
 *.key
 hr_secret.txt
+
+# Workspace-only repair artifacts; keep backups local and out of deployment inputs.
+.repair-backups/
+Auto-Fix-From-Vercel.js
+fix*.js
+fix*.ps1
+page_id.txt
+payload.json

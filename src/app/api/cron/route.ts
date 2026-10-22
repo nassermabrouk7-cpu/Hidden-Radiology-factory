@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { MAESTRO_CONFIG } from '@/lib/maestro/config';
 import { medicalAccuracyGate, qualityGate } from '@/lib/maestro/gates';
+import { isCronBearerAuthorized } from '@/lib/marketing-auth';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -11,7 +12,9 @@ const BOOK_IDEAS = [
   { titleAr: 'أشعة الجهاز العصبي', titleEn: 'Neuroradiology Made Simple', category: 'Neuro', brief: 'أساسيات MRI و CT للمخ والحبل الشوكي' },
 ];
 
-function generateFallbackContent(idea: any) {
+type BookIdea = (typeof BOOK_IDEAS)[number];
+
+function generateFallbackContent(idea: BookIdea) {
   return `# ${idea.titleAr} - ${idea.titleEn}
 
 ## المقدمة
@@ -39,14 +42,10 @@ ${idea.brief} - هذا الكتاب موجه لأطباء الأشعة والم�
 }
 
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const key = searchParams.get('key');
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && key !== cronSecret && key !== 'HRF2026_SECRET') {
+  if (!isCronBearerAuthorized(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const startTime = Date.now();
   const logs: string[] = [];
   const idea = BOOK_IDEAS[Math.floor(Math.random() * BOOK_IDEAS.length)];
 
@@ -61,8 +60,8 @@ export async function GET(req: Request) {
         category: idea.category, language: 'ar', brief: idea.brief,
       });
       logs.push('Draft from Gemini: ' + draft.length + ' chars');
-    } catch (e: any) {
-      logs.push('Gemini unavailable, using fallback: ' + e.message);
+    } catch {
+      logs.push('Gemini unavailable, using fallback content');
       draft = generateFallbackContent(idea);
       logs.push('Fallback draft: ' + draft.length + ' chars');
     }
@@ -87,7 +86,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json({ status: 'ok', idea, draft_length: draft.length, gates: { medical: medicalGate, quality: qualityResult }, logs });
 
-  } catch (error: any) {
-    return NextResponse.json({ status: 'error', error: error.message, logs }, { status: 500 });
+  } catch {
+    return NextResponse.json({ status: 'error', error: 'Book generation failed', logs }, { status: 500 });
   }
 }

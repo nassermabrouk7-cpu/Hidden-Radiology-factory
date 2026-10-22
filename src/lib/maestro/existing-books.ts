@@ -13,6 +13,13 @@ export const EXISTING_36_TITLES = [
   // سيتم ملؤها تلقائيا - ضع عناوين كتبك الحقيقية هنا
 ];
 
+interface BookIdea {
+  titleAr: string;
+  titleEn?: string;
+  category?: string;
+  brief?: string;
+}
+
 export function isDuplicate(newTitle: string, existingTitles: string[]): boolean {
   const normalize = (s: string) => s.toLowerCase().replace(/\s+/g, '').trim();
   const newNorm = normalize(newTitle);
@@ -22,7 +29,7 @@ export function isDuplicate(newTitle: string, existingTitles: string[]): boolean
   });
 }
 
-export function getNonDuplicateIdea(ideas: any[], existingTitles: string[]) {
+export function getNonDuplicateIdea(ideas: BookIdea[], existingTitles: string[]): BookIdea {
   for (const idea of ideas) {
     if (!isDuplicate(idea.titleAr, existingTitles)) return idea;
   }

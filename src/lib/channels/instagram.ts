@@ -15,8 +15,11 @@ export async function publishToInstagram(
   data: InstagramPostData
 ): Promise<InstagramPublishResult> {
   try {
+    if (!/^\d{10,20}$/.test(instagramBusinessAccountId) || !accessToken || accessToken.includes('|') || /SENSITIVE|REDACTED|^\[.*\]$/i.test(accessToken)) {
+      return { success: false, error: 'Instagram account ID or access token is malformed.' };
+    }
     // Step 1: Create media container
-    const containerUrl = `https://graph.facebook.com/${instagramBusinessAccountId}/media`;
+    const containerUrl = `https://graph.facebook.com/${encodeURIComponent(instagramBusinessAccountId)}/media`;
 
     const containerBody = {
       image_url: data.imageUrl,
@@ -30,19 +33,19 @@ export async function publishToInstagram(
       body: JSON.stringify(containerBody),
     });
 
-    const containerResult = await containerResponse.json();
+    const containerResult = await containerResponse.json().catch(() => ({}));
 
-    if (containerResult.error) {
+    if (!containerResponse.ok || containerResult.error || typeof containerResult.id !== 'string' || !containerResult.id) {
       return {
         success: false,
-        error: `Container creation failed: ${containerResult.error.message}`,
+        error: `Container creation failed: ${containerResult.error?.message || `HTTP ${containerResponse.status}`}`.split(accessToken).join('[REDACTED]').slice(0, 300),
       };
     }
 
     const containerId = containerResult.id;
 
     // Step 2: Publish the container
-    const publishUrl = `https://graph.facebook.com/${instagramBusinessAccountId}/media_publish`;
+    const publishUrl = `https://graph.facebook.com/${encodeURIComponent(instagramBusinessAccountId)}/media_publish`;
 
     const publishBody = {
       creation_id: containerId,
@@ -55,12 +58,12 @@ export async function publishToInstagram(
       body: JSON.stringify(publishBody),
     });
 
-    const publishResult = await publishResponse.json();
+    const publishResult = await publishResponse.json().catch(() => ({}));
 
-    if (publishResult.error) {
+    if (!publishResponse.ok || publishResult.error || typeof publishResult.id !== 'string' || !publishResult.id) {
       return {
         success: false,
-        error: `Publish failed: ${publishResult.error.message}`,
+        error: `Publish failed: ${publishResult.error?.message || `HTTP ${publishResponse.status}`}`.split(accessToken).join('[REDACTED]').slice(0, 300),
       };
     }
 
@@ -71,7 +74,7 @@ export async function publishToInstagram(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: error instanceof Error ? error.message.split(accessToken).join('[REDACTED]').slice(0, 300) : 'Unknown error',
     };
   }
 }

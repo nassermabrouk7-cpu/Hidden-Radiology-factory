@@ -2,6 +2,10 @@
 
 export type GateResult = { passed: boolean; score: number; reason: string; fixes?: string[] };
 
+interface GateImage {
+  url?: string | null;
+}
+
 export async function medicalAccuracyGate(content: string): Promise<GateResult> {
   const forbiddenPhrases = ["100% cure", "guaranteed", "no side effects", "100% شفاء", "مضمون"];
   const found = forbiddenPhrases.filter(p => content.toLowerCase().includes(p.toLowerCase()));
@@ -18,7 +22,7 @@ export async function medicalAccuracyGate(content: string): Promise<GateResult> 
   return { passed: true, score: 92, reason: "مراجعة طبية أولية ناجحة" };
 }
 
-export async function qualityGate(content: string, images: any[]): Promise<GateResult> {
+export async function qualityGate(content: string, images: GateImage[]): Promise<GateResult> {
   const checks = [];
   if (content.length < 500) checks.push("محتوى قصير");
   // مصنع تجريبي - مش لازم صور دلوقتي
@@ -31,7 +35,7 @@ export async function qualityGate(content: string, images: any[]): Promise<GateR
   return { passed: true, score: 88, reason: "جودة مقبولة" };
 }
 
-export async function visualQAGate(images: any[]): Promise<GateResult> {
+export async function visualQAGate(images: GateImage[]): Promise<GateResult> {
   for (const img of images) {
     if (!img.url || !img.url.startsWith("https://")) {
       return { passed: false, score: 50, reason: `رابط صورة غير صالح: ${img.url}`, fixes: ["استخدم رابط https"] };
