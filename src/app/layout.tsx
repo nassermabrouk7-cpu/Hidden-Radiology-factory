@@ -1,5 +1,5 @@
 ﻿import type { Metadata, Viewport } from "next";
-import { Cairo } from "next/font/google";
+import localFont from "next/font/local";
 import Script from "next/script";
 import { LanguageProvider } from "@/context/LanguageContext";
 import { CartProvider } from "@/context/CartContext";
@@ -7,9 +7,13 @@ import CartDrawer from "@/components/CartDrawer";
 import "./globals.css";
 
 // إعداد الخطوط
-const cairo = Cairo({
-  subsets: ["arabic", "latin"],
-  weight: ["400", "600", "700", "900"],
+const cairo = localFont({
+  src: [
+    { path: "../../public/fonts/Cairo-Regular.ttf", weight: "400" },
+    { path: "../../public/fonts/static/Cairo-SemiBold.ttf", weight: "600" },
+    { path: "../../public/fonts/Cairo-Bold.ttf", weight: "700" },
+    { path: "../../public/fonts/static/Cairo-Black.ttf", weight: "900" },
+  ],
   variable: "--font-cairo",
   display: "swap",
 });

@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { isMarketingItemPublishAuthorized } from "@/lib/marketing-auth";
 import { getTrustedProductCoverUrl } from "@/lib/marketing-media";
 import { getFacebookCredentialError } from "@/lib/facebook-credentials";
+import { getMetaTokenHealth, isMetaTokenPublishAllowed } from "@/lib/meta-token-health";
 
 type Platform = "instagram" | "facebook" | "linkedin";
 
@@ -598,6 +599,11 @@ export async function publishNextMarketingItem(): Promise<{
   if (!isMarketingItemPublishAuthorized("approved")) {
     return { processed: false, error: "Automatic social publishing is disabled." };
   }
+  const [facebookHealth, instagramHealth] = await Promise.all([
+    getMetaTokenHealth("facebook"),
+    getMetaTokenHealth("instagram"),
+  ]);
+  const metaCanPublish = isMetaTokenPublishAllowed;
   const supabase = getSupabase();
   const now = new Date().toISOString();
   const staleLockBefore = new Date(Date.now() - 30 * 60 * 1000).toISOString();
@@ -617,10 +623,15 @@ export async function publishNextMarketingItem(): Promise<{
   const configuredPlatforms: Platform[] = isMetricoolEnabled()
     ? (process.env.METRICOOL_PLATFORMS || "facebook,instagram,linkedin").split(",").map((value) => value.trim()).filter((value): value is Platform => ["facebook", "instagram", "linkedin"].includes(value as Platform))
     : (["instagram", "facebook", "linkedin"] as Platform[]).filter((platform) => {
-        if (platform === "facebook") return !getFacebookCredentialError(process.env.FACEBOOK_PAGE_ID, process.env.FACEBOOK_PAGE_ACCESS_TOKEN);
-        if (platform === "instagram") return Boolean(process.env.INSTAGRAM_USER_ID && process.env.INSTAGRAM_ACCESS_TOKEN);
+        if (platform === "facebook") return metaCanPublish(facebookHealth.status) && !getFacebookCredentialError(process.env.FACEBOOK_PAGE_ID, process.env.FACEBOOK_PAGE_ACCESS_TOKEN);
+        if (platform === "instagram") return metaCanPublish(instagramHealth.status) && Boolean(process.env.INSTAGRAM_USER_ID && process.env.INSTAGRAM_ACCESS_TOKEN);
         return Boolean(process.env.LINKEDIN_ACCESS_TOKEN && process.env.LINKEDIN_AUTHOR_URN);
       });
+  const safePlatforms = configuredPlatforms.filter((platform) =>
+    platform === "facebook" ? metaCanPublish(facebookHealth.status)
+      : platform === "instagram" ? metaCanPublish(instagramHealth.status)
+        : true,
+  );
 
   // Generated queue items require an explicit admin approval before any provider call.
   const eligibleStatuses = ["approved"];
@@ -629,7 +640,7 @@ export async function publishNextMarketingItem(): Promise<{
     .from("marketing_content")
     .select("*")
     .in("status", eligibleStatuses)
-    .in("platform", configuredPlatforms)
+    .in("platform", safePlatforms)
     .not("scheduled_at", "is", null)
     .is("published_at", null)
     .order("scheduled_at", { ascending: true });

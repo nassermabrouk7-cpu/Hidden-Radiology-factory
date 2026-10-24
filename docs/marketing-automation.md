@@ -1,12 +1,13 @@
 # Marketing automation
 
-The marketing flow creates a 12-post Arabic/English campaign for an existing product, stores each post in Supabase, and schedules one post per day. Vercel calls `/api/marketing/cron` once per day at 06:00 UTC. The route avoids creating another campaign while future posts remain in the queue.
+The marketing flow creates a 12-post Arabic/English campaign for an existing product, stores each post in Supabase, and schedules one post per day. `/api/marketing/cron` is implemented but is not scheduled in the current `vercel.json`; that file schedules the Meta health check and product publishing. The route avoids creating another campaign while future posts remain in the queue.
 
 ## Setup
 
 1. Apply the marketing migrations in timestamp order:
    - `202610080002_marketing_engine.sql`
    - `202610080003_marketing_publisher.sql`
+   - `202610220001_meta_token_health_alerts.sql`
 2. Set `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET`, and a Google AI Studio `GEMINI_API_KEY` using Gemini's Standard Free Tier. Keep the service-role and provider keys server-only. The key itself does not prove which billing tier is enabled; after confirming the Google AI Studio project is free-tier, set `GEMINI_FREE_TIER_ONLY=true` to enable generation. Otherwise both book-draft and campaign generation remain disabled.
 3. Set the verified destination for this factory in `MARKETING_SITE_URL`. Campaign generation stops before writing anything if it is missing or invalid; the factory does not infer a URL from another project.
 4. Keep `MARKETING_AUTO_PUBLISH` unset or set to `false` to generate and queue ads without publishing them publicly. Public publishing requires social-platform credentials and an explicit decision to set it to `true`.
@@ -29,7 +30,26 @@ Instagram direct publishing also requires an Instagram professional account and 
 
 ## Vercel schedule
 
-`vercel.json` runs once per day at 06:00 UTC. This cadence works on Vercel Hobby plans, which permit at most one cron invocation per day. On Hobby, Vercel may run the invocation at any time during the configured hour.
+`vercel.json` runs product publishing at 07:00 UTC. This cadence works on Vercel Hobby plans, which permit at most one cron invocation per day. On Hobby, Vercel may run the invocation at any time during the configured hour.
+
+The Meta token health check is scheduled at 05:00 UTC, before product publishing at 07:00 UTC. Product publishing also rechecks token health immediately before use. Apply `supabase/migrations/202610220001_meta_token_health_alerts.sql` before deploying this schedule. Both schedules run once daily. The route uses the same `CRON_SECRET` bearer guard and never returns token data. Meta publishing is blocked unless Meta confirms the token is valid (a token reported as expiring is still eligible); `invalid`, `expired`, `unknown`, `unavailable`, and `not_configured` all block publishing. A temporary debugger outage is reported as `unavailable`, never as proof that a token is invalid.
+
+## Environment variables
+
+Configure these names in the server environment; never put secret values in source control.
+
+| Variable | Used for |
+| --- | --- |
+| `META_APP_ID`, `META_APP_SECRET` | Token Debugging health checks for both Meta channels; required with the channel's access token. |
+| `FACEBOOK_PAGE_ACCESS_TOKEN`, `INSTAGRAM_ACCESS_TOKEN` | Token health checks and direct channel publishing. |
+| `FACEBOOK_PAGE_ID`, `INSTAGRAM_BUSINESS_ACCOUNT_ID` | Product publishing routes (`/api/publish-all`, `/api/publish-one`, `/api/test-publish`). |
+| `INSTAGRAM_USER_ID` | Marketing queue direct Instagram publishing and campaign generation. |
+| `META_TOKEN_ALERT_EMAIL` | Recipient for token health alerts. |
+| `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | Sending token alerts; these are also used by existing email features. |
+| `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Server-side access to token alert state and application data. The service role key must remain server-only. |
+| `CRON_SECRET` | Bearer authentication for scheduled health and publishing routes; use a random secret of at least 32 characters. |
+
+The health check needs `META_APP_ID`, `META_APP_SECRET`, and the channel token. Direct Facebook publishing additionally needs `FACEBOOK_PAGE_ID`; direct Instagram product publishing needs `INSTAGRAM_BUSINESS_ACCOUNT_ID`, while the marketing queue uses `INSTAGRAM_USER_ID`. Alert delivery also needs the recipient, Resend configuration, and Supabase state-store configuration. Health checks do not refresh credentials. See `FACEBOOK_INSTAGRAM_FIX_REPORT.md` for first-time Meta App Dashboard setup and the OAuth work still required for secure reauthorization.
 
 ## Book production
 

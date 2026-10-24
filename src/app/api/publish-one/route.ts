@@ -4,6 +4,7 @@ import channelsConfig from "@/channels.config.json";
 import { publishToFacebook } from "@/lib/channels/facebook";
 import { publishToInstagram } from "@/lib/channels/instagram";
 import { getFacebookCredentialError } from "@/lib/facebook-credentials";
+import { getMetaTokenHealth, isMetaTokenPublishAllowed, type MetaTokenHealth } from "@/lib/meta-token-health";
 import { isCronBearerAuthorized } from "@/lib/marketing-auth";
 import { getTrustedProductCoverUrl } from "@/lib/marketing-media";
 import { makeSalesCaption } from "@/lib/product-publishing";
@@ -45,15 +46,16 @@ function isChannel(value: unknown): value is Channel {
   return value === "telegram" || value === "facebook" || value === "instagram";
 }
 
-function channelConfigured(channel: Channel): boolean {
+function channelConfigured(channel: Channel, metaHealth?: MetaTokenHealth): boolean {
   if (!channelsConfig[channel]?.enabled) return false;
   if (channel === "telegram") {
     return Boolean(process.env.TELEGRAM_BOT_TOKEN && channelsConfig.telegram.chat_id);
   }
   if (channel === "facebook") {
-    return !getFacebookCredentialError(process.env.FACEBOOK_PAGE_ID, process.env.FACEBOOK_PAGE_ACCESS_TOKEN);
+    return (!metaHealth || isMetaTokenPublishAllowed(metaHealth.status)) && !getFacebookCredentialError(process.env.FACEBOOK_PAGE_ID, process.env.FACEBOOK_PAGE_ACCESS_TOKEN);
   }
   return Boolean(
+    (!metaHealth || isMetaTokenPublishAllowed(metaHealth.status)) &&
     /^\d{10,20}$/.test(process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID || "") &&
     process.env.INSTAGRAM_ACCESS_TOKEN,
   );
@@ -156,9 +158,12 @@ export async function POST(request: NextRequest) {
   const channel = body.channel;
   const publishRequested = body.publish === true;
 
-  const configured = channelConfigured(channel);
+  const metaHealth = channel === "facebook" || channel === "instagram"
+    ? await getMetaTokenHealth(channel)
+    : undefined;
+  const configured = channelConfigured(channel, metaHealth);
   if (publishRequested && !configured) {
-    return NextResponse.json({ success: false, error: `The ${channel} channel is disabled or not configured.` }, { status: 503 });
+    return NextResponse.json({ success: false, error: `The ${channel} channel is disabled, not configured, or its Meta token is not verified for publishing.` }, { status: 503 });
   }
 
   try {

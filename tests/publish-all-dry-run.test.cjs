@@ -8,7 +8,7 @@ const ts = require("typescript");
 const routeSource = readFileSync(resolve(__dirname, "../src/app/api/publish-all/route.ts"), "utf8");
 const channelsConfig = require("../src/channels.config.json");
 
-function makeRoute({ fetchMock, database, providerCalls }) {
+function makeRoute({ fetchMock, database, providerCalls, metaStatus = "valid" }) {
   const compiled = ts.transpileModule(routeSource, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
@@ -20,6 +20,10 @@ function makeRoute({ fetchMock, database, providerCalls }) {
     "@supabase/supabase-js": { createClient: () => database },
     "@/channels.config.json": { default: channelsConfig },
     "@/lib/facebook-credentials": { getFacebookCredentialError: () => null },
+    "@/lib/meta-token-health": {
+      getMetaTokenHealth: async () => ({ status: metaStatus, expiresAt: null }),
+      isMetaTokenPublishAllowed: (status) => ["valid", "expiring"].includes(status),
+    },
     "@/lib/channels/facebook": { publishToFacebook: async () => { providerCalls.count += 1; throw new Error("unexpected provider call"); } },
     "@/lib/channels/instagram": { publishToInstagram: async () => { providerCalls.count += 1; throw new Error("unexpected provider call"); } },
     "@/lib/channels/linkedin": { publishToLinkedIn: async () => { providerCalls.count += 1; throw new Error("unexpected provider call"); } },
@@ -141,4 +145,50 @@ test("publish-all dryRun authenticates, previews enabled channels, and creates n
   assert.ok(response.body.channels.every(({ status }) => status === "would_publish"));
   assert.ok(fetchCalls.every(({ method }) => method === "HEAD"));
   assert.ok(fetchCalls.every(({ url }) => url === product.cover_url));
+});
+
+test("publish-all dryRun reports Meta channels as unavailable when token health cannot be verified", async (t) => {
+  const envNames = ["CRON_SECRET", "NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "FACEBOOK_PAGE_ID", "FACEBOOK_PAGE_ACCESS_TOKEN", "INSTAGRAM_BUSINESS_ACCOUNT_ID", "INSTAGRAM_ACCESS_TOKEN"];
+  const old = Object.fromEntries(envNames.map((name) => [name, process.env[name]]));
+  t.after(() => envNames.forEach((name) => old[name] === undefined ? delete process.env[name] : process.env[name] = old[name]));
+  Object.assign(process.env, { CRON_SECRET: "c".repeat(32), NEXT_PUBLIC_SUPABASE_URL: "https://project.example.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "local-test-key", FACEBOOK_PAGE_ID: "1234567890123456", FACEBOOK_PAGE_ACCESS_TOKEN: "local-fake", INSTAGRAM_BUSINESS_ACCOUNT_ID: "1234567890", INSTAGRAM_ACCESS_TOKEN: "local-fake" });
+  const product = { id: "health-preview", title_en: "Preview", title_ar: null, description_en: "Description", description_ar: null, price: 10, category: "test", cover_url: "https://project.example.supabase.co/storage/v1/object/public/covers/a.jpg" };
+  const database = { writes: [], from(table) {
+    const query = { select() { return this; }, eq() { return this; }, limit() { return this; }, insert() { database.writes.push("insert"); return this; }, update() { database.writes.push("update"); return this; }, then(resolve, reject) { return Promise.resolve({ data: table === "products" ? [product] : [], error: null }).then(resolve, reject); } };
+    return query;
+  } };
+  const providerCalls = { count: 0 };
+  const route = makeRoute({ fetchMock: async () => ({ ok: true, headers: { get: () => "image/jpeg" } }), database, providerCalls, metaStatus: "unavailable" });
+  const request = new Request("https://factory.example/api/publish-all?dry_run=true", { headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } });
+  Object.defineProperty(request, "nextUrl", { value: new URL(request.url) });
+
+  const response = await route.GET(request);
+  assert.equal(response.status, 200);
+  assert.equal(response.body.externalPostsCreated, false);
+  assert.equal(response.body.channels.find(({ channel }) => channel === "facebook").status, "not_configured");
+  assert.equal(response.body.channels.find(({ channel }) => channel === "instagram").status, "not_configured");
+  assert.deepEqual(database.writes, []);
+  assert.equal(providerCalls.count, 0);
+});
+
+test("publish-all never invokes Meta publishers for rejected health states", async (t) => {
+  const envNames = ["CRON_SECRET", "NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "FACEBOOK_PAGE_ID", "FACEBOOK_PAGE_ACCESS_TOKEN", "INSTAGRAM_BUSINESS_ACCOUNT_ID", "INSTAGRAM_ACCESS_TOKEN"];
+  const old = Object.fromEntries(envNames.map((name) => [name, process.env[name]]));
+  t.after(() => envNames.forEach((name) => old[name] === undefined ? delete process.env[name] : process.env[name] = old[name]));
+  Object.assign(process.env, { CRON_SECRET: "c".repeat(32), NEXT_PUBLIC_SUPABASE_URL: "https://project.example.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "local-test-key", FACEBOOK_PAGE_ID: "1234567890123456", FACEBOOK_PAGE_ACCESS_TOKEN: "local-fake", INSTAGRAM_BUSINESS_ACCOUNT_ID: "1234567890", INSTAGRAM_ACCESS_TOKEN: "local-fake" });
+  const product = { id: "health-gate", title_en: "Test product", title_ar: null, description_en: "Description", description_ar: null, price: 10, category: "test", cover_url: "https://project.example.supabase.co/storage/v1/object/public/covers/a.jpg" };
+  for (const metaStatus of ["invalid", "expired", "unknown", "unavailable", "not_configured"]) {
+    const database = { writes: [], from(table) {
+      const query = { table, row: null, values: null, select() { return this; }, eq() { return this; }, limit() { return this; }, insert(row) { this.row = row; database.writes.push({ table, operation: "insert" }); return this; }, update(values) { this.values = values; database.writes.push({ table, operation: "update" }); return this; }, single: async () => ({ data: { id: "campaign-local" }, error: null }), then(resolve, reject) { return Promise.resolve({ data: table === "products" ? [product] : null, error: null }).then(resolve, reject); } };
+      return query;
+    } };
+    const calls = { count: 0 };
+    const fetchMock = async (_url, init = {}) => ({ ok: true, headers: { get: () => init.method === "HEAD" ? "image/jpeg" : null } });
+    const route = makeRoute({ fetchMock, database, providerCalls: calls, metaStatus });
+    const request = new Request("https://factory.example/api/publish-all", { method: "POST", headers: { authorization: `Bearer ${process.env.CRON_SECRET}`, "content-type": "application/json" }, body: JSON.stringify({ bookId: product.id }) });
+    Object.defineProperty(request, "nextUrl", { value: new URL(request.url) });
+    const response = await route.POST(request);
+    assert.equal(response.status, 200, `${metaStatus} should complete safely without publishing Meta`);
+    assert.equal(calls.count, 0, `${metaStatus} must prevent all providers from being invoked`);
+  }
 });

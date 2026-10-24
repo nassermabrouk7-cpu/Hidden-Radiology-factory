@@ -99,6 +99,7 @@ test("Vercel schedules daily store product publishing without overlapping the ma
     readFileSync(resolve(__dirname, "../vercel.json"), "utf8"),
   );
   assert.deepEqual(config.crons, [
+    { path: "/api/cron/meta-token-health", schedule: "0 5 * * *" },
     { path: "/api/publish-all?auto=true", schedule: "0 7 * * *" },
   ]);
   assert.equal(

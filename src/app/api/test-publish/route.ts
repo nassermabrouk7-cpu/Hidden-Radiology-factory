@@ -6,6 +6,7 @@ import { publishToThreads } from '@/lib/channels/threads';
 import { publishToLinkedIn } from '@/lib/channels/linkedin';
 import { isCronBearerAuthorized } from '@/lib/marketing-auth';
 import { getFacebookCredentialError } from '@/lib/facebook-credentials';
+import { getMetaTokenHealth, isMetaTokenPublishAllowed, type MetaTokenHealth } from '@/lib/meta-token-health';
 
 interface PublishRequest {
   bookId?: string;
@@ -102,6 +103,10 @@ export async function POST(request: NextRequest) {
   try {
     const body: PublishRequest = await request.json();
     const testChannels = body.channels || ['telegram']; // Default to telegram only
+    const metaHealth: Partial<Record<'facebook' | 'instagram', MetaTokenHealth>> = {};
+    if (testChannels.includes('facebook')) metaHealth.facebook = await getMetaTokenHealth('facebook');
+    if (testChannels.includes('instagram')) metaHealth.instagram = await getMetaTokenHealth('instagram');
+    const metaCanPublish = (status: MetaTokenHealth['status'] | undefined) => status !== undefined && isMetaTokenPublishAllowed(status);
 
     // If no data provided, use default test data
     const bookId = body.bookId || 'test-book-001';
@@ -126,8 +131,8 @@ export async function POST(request: NextRequest) {
           : false;
         let configured = false;
         if (channel === 'telegram') configured = Boolean(process.env.TELEGRAM_BOT_TOKEN);
-        if (channel === 'facebook') configured = !getFacebookCredentialError(process.env.FACEBOOK_PAGE_ID, process.env.FACEBOOK_PAGE_ACCESS_TOKEN);
-        if (channel === 'instagram') configured = Boolean(process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID && process.env.INSTAGRAM_ACCESS_TOKEN);
+        if (channel === 'facebook') configured = metaCanPublish(metaHealth.facebook?.status) && !getFacebookCredentialError(process.env.FACEBOOK_PAGE_ID, process.env.FACEBOOK_PAGE_ACCESS_TOKEN);
+        if (channel === 'instagram') configured = metaCanPublish(metaHealth.instagram?.status) && Boolean(process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID && process.env.INSTAGRAM_ACCESS_TOKEN);
         if (channel === 'threads') configured = Boolean(process.env.THREADS_USER_ID && process.env.THREADS_ACCESS_TOKEN);
         if (channel === 'linkedin') configured = Boolean(process.env.LINKEDIN_ORGANIZATION_ID && process.env.LINKEDIN_ACCESS_TOKEN);
         return { channel, enabled, configured, status: !enabled ? 'disabled' : configured ? 'would_publish' : 'not_configured' };
@@ -177,6 +182,10 @@ export async function POST(request: NextRequest) {
         );
         results.push(result);
       } else if (channel === 'facebook') {
+        if (!metaCanPublish(metaHealth.facebook?.status)) {
+          results.push({ channel: 'facebook', success: false, message: 'Facebook token health is not publishable', error: 'Meta token health could not verify Facebook publishing.' });
+          continue;
+        }
         if (!channelsConfig.facebook?.enabled) {
           results.push({
             channel: 'facebook',
@@ -213,6 +222,10 @@ export async function POST(request: NextRequest) {
           error: fbResult.error,
         });
       } else if (channel === 'instagram') {
+        if (!metaCanPublish(metaHealth.instagram?.status)) {
+          results.push({ channel: 'instagram', success: false, message: 'Instagram token health is not publishable', error: 'Meta token health could not verify Instagram publishing.' });
+          continue;
+        }
         if (!channelsConfig.instagram?.enabled) {
           results.push({
             channel: 'instagram',
@@ -395,3 +408,5 @@ export async function GET(request: NextRequest) {
     }
   });
 }
+
+

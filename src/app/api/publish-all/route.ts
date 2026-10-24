@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import channelsConfig from "@/channels.config.json";
 import { getFacebookCredentialError } from "@/lib/facebook-credentials";
+import { getMetaTokenHealth, isMetaTokenPublishAllowed, type MetaTokenHealth } from "@/lib/meta-token-health";
 import { publishToFacebook } from "@/lib/channels/facebook";
 import { publishToInstagram } from "@/lib/channels/instagram";
 import { publishToLinkedIn } from "@/lib/channels/linkedin";
@@ -61,13 +62,13 @@ function enabledChannels(): Channel[] {
     .filter((channel) => Boolean(channelsConfig[channel]?.enabled));
 }
 
-function channelConfigured(channel: Channel): boolean {
+function channelConfigured(channel: Channel, metaHealth: Partial<Record<"facebook" | "instagram", MetaTokenHealth>>): boolean {
   if (channel === "telegram") return Boolean(process.env.TELEGRAM_BOT_TOKEN && channelsConfig.telegram.chat_id);
-  if (channel === "facebook") return !getFacebookCredentialError(
+  if (channel === "facebook") return (metaHealth.facebook !== undefined && isMetaTokenPublishAllowed(metaHealth.facebook.status)) && !getFacebookCredentialError(
     process.env.FACEBOOK_PAGE_ID,
     process.env.FACEBOOK_PAGE_ACCESS_TOKEN,
   );
-  if (channel === "instagram") return Boolean(
+  if (channel === "instagram") return (metaHealth.instagram !== undefined && isMetaTokenPublishAllowed(metaHealth.instagram.status)) && Boolean(
     /^\d{10,20}$/.test(process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID || "") && process.env.INSTAGRAM_ACCESS_TOKEN,
   );
   if (channel === "threads") return Boolean(process.env.THREADS_USER_ID && process.env.THREADS_ACCESS_TOKEN);
@@ -124,8 +125,8 @@ async function publishTelegram(token: string, imageUrl: string, caption: string,
   }
 }
 
-async function publishOne(channel: Channel, imageUrl: string, caption: string, buyUrl: string): Promise<PublishOutcome> {
-  if (!channelConfigured(channel)) return { success: false, error: `${channel} is enabled but required credentials are not configured.` };
+async function publishOne(channel: Channel, imageUrl: string, caption: string, buyUrl: string, metaHealth: Partial<Record<"facebook" | "instagram", MetaTokenHealth>>): Promise<PublishOutcome> {
+  if (!channelConfigured(channel, metaHealth)) return { success: false, error: `${channel} is enabled but required credentials are not configured or verified.` };
   try {
     if (channel === "telegram") return publishTelegram(process.env.TELEGRAM_BOT_TOKEN!, imageUrl, caption, buyUrl);
     if (channel === "facebook") {
@@ -179,9 +180,13 @@ async function loadValidProducts(supabase: ReturnType<typeof getSupabase>): Prom
 }
 
 async function handlePublish(request: NextRequest, payload: Record<string, unknown>) {
-  const supabase = getSupabase();
   const autoMode = request.nextUrl.searchParams.get("auto") === "true" || payload.auto === true;
   const dryRun = request.nextUrl.searchParams.get("dry_run") === "true" || payload.dryRun === true;
+  const metaHealth = {
+    facebook: await getMetaTokenHealth("facebook"),
+    instagram: await getMetaTokenHealth("instagram"),
+  };
+  const supabase = getSupabase();
   const channels = enabledChannels();
   if (!channels.length) return NextResponse.json({ success: false, error: "No direct publisher channels are enabled." }, { status: 503 });
 
@@ -223,7 +228,7 @@ async function handlePublish(request: NextRequest, payload: Record<string, unkno
   const retryMetadata = retryCampaign
     ? getRetryMetadata(retryCampaign.metadata as Record<string, unknown>)
     : { attempts: 0, results: {} as ChannelPublishRecords };
-  const channelsToRun = getChannelsToPublish(channels, retryMetadata.results);
+  const channelsToRun = getChannelsToPublish(channels.filter((channel) => channelConfigured(channel, metaHealth)), retryMetadata.results);
 
   if (dryRun) {
     return NextResponse.json({
@@ -236,8 +241,8 @@ async function handlePublish(request: NextRequest, payload: Record<string, unkno
       channels: channels.map((channel) => ({
         channel,
         enabled: true,
-        configured: channelConfigured(channel),
-        status: !channelConfigured(channel) ? "not_configured" : channelsToRun.includes(channel) ? "would_publish" : "already_published",
+        configured: channelConfigured(channel, metaHealth),
+        status: !channelConfigured(channel, metaHealth) ? "not_configured" : channelsToRun.includes(channel) ? "would_publish" : "already_published",
       })),
       campaignId,
       externalPostsCreated: false,
@@ -287,7 +292,7 @@ async function handlePublish(request: NextRequest, payload: Record<string, unkno
 
   const results: ChannelPublishRecords = { ...retryMetadata.results };
   for (const channel of channelsToRun as Channel[]) {
-    results[channel] = await publishOne(channel, imageUrl, caption, buyUrl);
+    results[channel] = await publishOne(channel, imageUrl, caption, buyUrl, metaHealth);
   }
   const status = getCampaignStatus(channels, results);
   const attemptMetadata = {
