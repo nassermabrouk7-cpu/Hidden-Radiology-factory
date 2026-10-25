@@ -15,6 +15,12 @@ function loadRoute(statuses, calls) {
     "@/channels.config.json": { default: channels },
     "@/lib/marketing-auth": { isCronBearerAuthorized: () => true },
     "@/lib/facebook-credentials": { getFacebookCredentialError: () => null },
+    "@/lib/meta-credentials": { getInstagramBusinessAccountId: () => process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID || process.env.INSTAGRAM_USER_ID || null },
+    "@/lib/meta-token-vault": {
+      getMetaPublishCredentials: async (channel) => channel === "facebook"
+        ? { id: process.env.FACEBOOK_PAGE_ID, accessToken: process.env.FACEBOOK_PAGE_ACCESS_TOKEN }
+        : { id: process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID || process.env.INSTAGRAM_USER_ID, accessToken: process.env.INSTAGRAM_ACCESS_TOKEN },
+    },
     "@/lib/meta-token-health": { getMetaTokenHealth: async (name) => ({ status: statuses[name], expiresAt: null }), isMetaTokenPublishAllowed: (status) => status === "valid" || status === "expiring" },
     "@/lib/channels/facebook": { publishToFacebook: async () => { calls.push("facebook"); return { success: true, postId: "fake" }; } },
     "@/lib/channels/instagram": { publishToInstagram: async () => { calls.push("instagram"); return { success: true, postId: "fake" }; } },

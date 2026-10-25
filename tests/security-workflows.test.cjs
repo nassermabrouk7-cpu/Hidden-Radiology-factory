@@ -51,6 +51,7 @@ test("marketing jobs require the exact bearer secret", async (t) => {
   assert.equal(marketing.isMarketingJobAuthorized(new Request("https://factory.example/api", { headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` } })), true);
   assert.equal(marketing.isMarketingJobAuthorized(new Request("https://factory.example/api", { headers: { Authorization: "Bearer wrong-secret" } })), false);
   assert.equal(marketing.isMarketingJobAuthorized(new Request("https://factory.example/api")), false);
+  assert.equal(marketing.isMarketingJobAuthorized(new Request(`https://factory.example/api?key=${process.env.CRON_SECRET}`)), false);
 });
 
 test("publishing endpoints reject absent, short, and incorrect cron bearer credentials", async (t) => {

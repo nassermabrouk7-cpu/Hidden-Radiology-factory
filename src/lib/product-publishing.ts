@@ -2,14 +2,15 @@ export type ChannelPublishRecord = {
   success: boolean;
   externalId?: string;
   error?: string;
+  status?: "published" | "failed" | "not_configured" | "unknown";
 };
 
 export type ChannelPublishRecords = Record<string, ChannelPublishRecord>;
 
-export function getChannelsToPublish(
-  enabledChannels: string[],
+export function getChannelsToPublish<TChannel extends string>(
+  enabledChannels: TChannel[],
   priorResults: ChannelPublishRecords,
-): string[] {
+): TChannel[] {
   return enabledChannels.filter((channel) => !priorResults[channel]?.success);
 }
 
@@ -17,7 +18,7 @@ export function getCampaignStatus(
   enabledChannels: string[],
   results: ChannelPublishRecords,
 ): "ready" | "active" | "completed" {
-  if (enabledChannels.length > 0 && enabledChannels.every((channel) => results[channel]?.success)) {
+  if (enabledChannels.length > 0 && enabledChannels.every((channel) => results[channel]?.success === true)) {
     return "completed";
   }
   if (enabledChannels.some((channel) => results[channel]?.success)) return "active";
@@ -31,21 +32,54 @@ export function getRetryMetadata(
   const rawAttempts = Number(current.attempts);
   const attempts = Number.isSafeInteger(rawAttempts) && rawAttempts >= 0 ? rawAttempts : 0;
   const rawResults = current.channel_results;
-  const results = rawResults && typeof rawResults === "object" && !Array.isArray(rawResults)
-    ? rawResults as ChannelPublishRecords
-    : {};
+  const results: ChannelPublishRecords = {};
+  if (rawResults && typeof rawResults === "object" && !Array.isArray(rawResults)) {
+    for (const [channel, value] of Object.entries(rawResults)) {
+      if (typeof value === "object" && value !== null && "success" in value && typeof value.success === "boolean") {
+        results[channel] = value as ChannelPublishRecord;
+      }
+    }
+  }
   return { attempts, results };
+}
+
+export function getRequiredCampaignChannels(
+  metadata: Record<string, unknown> | null | undefined,
+  enabledChannels: string[],
+): string[] {
+  const stored = metadata?.required_channels;
+  return Array.isArray(stored)
+    ? [...new Set(stored.filter((channel): channel is string => typeof channel === "string"))]
+    : enabledChannels;
 }
 
 export function canRetryCampaign(
   metadata: Record<string, unknown> | null | undefined,
   maxAttempts: number,
+  requiredChannels?: string[],
 ): boolean {
   const current = metadata || {};
   const { attempts, results } = getRetryMetadata(current);
-  return current.retry_exhausted !== true && attempts < maxAttempts && (
-    Object.keys(results).length === 0 || Object.values(results).some((result) => !result?.success)
-  );
+  if (current.retry_exhausted === true || current.attempt_in_progress === true || attempts >= maxAttempts) return false;
+  const required = getRequiredCampaignChannels(current, requiredChannels || []);
+  if (required.length) return required.some((channel) => results[channel]?.success !== true);
+  return Object.values(results).some((result) => result.success !== true) || Object.keys(results).length === 0;
+}
+
+export async function claimDailyProductPublishRun(
+  store: {
+    rpc: (name: string, args: Record<string, string>) => PromiseLike<{ data: unknown; error: unknown }>;
+  },
+  now = new Date(),
+): Promise<{ claimed: boolean; runDate: string; idempotencyKey: string }> {
+  const runDate = now.toISOString().slice(0, 10);
+  const idempotencyKey = `product-publish:${runDate}`;
+  const { data, error } = await store.rpc("claim_product_publish_daily_run", {
+    p_run_date: runDate,
+    p_idempotency_key: idempotencyKey,
+  });
+  if (error) throw new Error("Could not acquire the daily product publishing lock.");
+  return { claimed: data === true, runDate, idempotencyKey };
 }
 
 export function countsTowardProductCooldown(

@@ -3,6 +3,8 @@ import { isMarketingItemPublishAuthorized } from "@/lib/marketing-auth";
 import { getTrustedProductCoverUrl } from "@/lib/marketing-media";
 import { getFacebookCredentialError } from "@/lib/facebook-credentials";
 import { getMetaTokenHealth, isMetaTokenPublishAllowed } from "@/lib/meta-token-health";
+import { getInstagramBusinessAccountId } from "@/lib/meta-credentials";
+import { getMetaPublishCredentials } from "@/lib/meta-token-vault";
 
 type Platform = "instagram" | "facebook" | "linkedin";
 
@@ -39,11 +41,11 @@ function isMetricoolEnabled(): boolean {
   return process.env.MARKETING_ALLOW_PAID_METRICOOL_API === "true" && Boolean(process.env.METRICOOL_API_TOKEN);
 }
 
-function sanitizeError(value: unknown): string {
+function sanitizeError(value: unknown, additionalSecrets: string[] = []): string {
   if (typeof value !== "string" || !value) return "";
 
   let message = value;
-  for (const secret of [process.env.METRICOOL_API_TOKEN, process.env.FACEBOOK_PAGE_ACCESS_TOKEN, process.env.INSTAGRAM_ACCESS_TOKEN, process.env.LINKEDIN_ACCESS_TOKEN, process.env.CRON_SECRET, process.env.SUPABASE_SERVICE_ROLE_KEY]) {
+  for (const secret of [...additionalSecrets, process.env.METRICOOL_API_TOKEN, process.env.FACEBOOK_PAGE_ACCESS_TOKEN, process.env.INSTAGRAM_ACCESS_TOKEN, process.env.LINKEDIN_ACCESS_TOKEN, process.env.CRON_SECRET, process.env.SUPABASE_SERVICE_ROLE_KEY]) {
     if (secret) message = message.split(secret).join("[REDACTED]");
   }
   return message.slice(0, 500);
@@ -53,9 +55,9 @@ function isTrustedMediaUrl(value: string): boolean {
   return getTrustedProductCoverUrl(value, process.env.NEXT_PUBLIC_SUPABASE_URL) !== null;
 }
 
-function sanitizeText(value: string): string {
+function sanitizeText(value: string, additionalSecrets: string[] = []): string {
   let result = value;
-  for (const secret of [process.env.METRICOOL_API_TOKEN, process.env.FACEBOOK_PAGE_ACCESS_TOKEN, process.env.INSTAGRAM_ACCESS_TOKEN, process.env.LINKEDIN_ACCESS_TOKEN, process.env.CRON_SECRET, process.env.SUPABASE_SERVICE_ROLE_KEY]) {
+  for (const secret of [...additionalSecrets, process.env.METRICOOL_API_TOKEN, process.env.FACEBOOK_PAGE_ACCESS_TOKEN, process.env.INSTAGRAM_ACCESS_TOKEN, process.env.LINKEDIN_ACCESS_TOKEN, process.env.CRON_SECRET, process.env.SUPABASE_SERVICE_ROLE_KEY]) {
     if (secret) result = result.split(secret).join("[REDACTED]");
   }
   return result;
@@ -111,8 +113,9 @@ function buildPostText(content: MarketingContent): string {
 async function publishToFacebook(
   content: MarketingContent
 ): Promise<PublishResult> {
-  const pageId = process.env.FACEBOOK_PAGE_ID;
-  const accessToken = process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
+  const credentials = await getMetaPublishCredentials("facebook");
+  const pageId = credentials?.id;
+  const accessToken = credentials?.accessToken;
 
   const credentialError = getFacebookCredentialError(pageId, accessToken);
   if (credentialError || !pageId || !accessToken) {
@@ -144,9 +147,9 @@ async function publishToFacebook(
   if (!response.ok || !data?.id) {
     return {
       success: false,
-      response: sanitizeResponse(data),
+      response: sanitizeResponse(data, [accessToken]),
       error:
-        sanitizeError(data?.error?.message) ||
+        sanitizeError(data?.error?.message, [accessToken]) ||
         `Facebook API returned HTTP ${response.status}.`,
     };
   }
@@ -154,7 +157,7 @@ async function publishToFacebook(
   return {
     success: true,
     externalPostId: String(data.id),
-    response: sanitizeResponse(data),
+    response: sanitizeResponse(data, [accessToken]),
   };
 }
 
@@ -171,14 +174,15 @@ async function publishToFacebook(
 async function publishToInstagram(
   content: MarketingContent
 ): Promise<PublishResult> {
-  const instagramUserId = process.env.INSTAGRAM_USER_ID;
-  const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN;
+  const credentials = await getMetaPublishCredentials("instagram");
+  const instagramUserId = credentials?.id || (process.env.META_TOKEN_VAULT_ENABLED === "true" ? null : getInstagramBusinessAccountId());
+  const accessToken = credentials?.accessToken;
 
   if (!instagramUserId || !accessToken) {
     return {
       success: false,
       error:
-        "Instagram publisher is not configured. Missing INSTAGRAM_USER_ID or INSTAGRAM_ACCESS_TOKEN.",
+        "Instagram publisher is not configured. Set INSTAGRAM_BUSINESS_ACCOUNT_ID (or the matching legacy INSTAGRAM_USER_ID) and INSTAGRAM_ACCESS_TOKEN.",
     };
   }
 
@@ -224,9 +228,9 @@ async function publishToInstagram(
   if (!containerResponse.ok || !containerData?.id) {
     return {
       success: false,
-      response: sanitizeResponse(containerData),
+      response: sanitizeResponse(containerData, [accessToken]),
       error:
-        sanitizeError(containerData?.error?.message) ||
+        sanitizeError(containerData?.error?.message, [accessToken]) ||
         `Instagram container API returned HTTP ${containerResponse.status}.`,
     };
   }
@@ -255,9 +259,9 @@ async function publishToInstagram(
   if (!publishResponse.ok || !publishData?.id) {
     return {
       success: false,
-      response: sanitizeResponse(publishData),
+      response: sanitizeResponse(publishData, [accessToken]),
       error:
-        sanitizeError(publishData?.error?.message) ||
+        sanitizeError(publishData?.error?.message, [accessToken]) ||
         `Instagram publish API returned HTTP ${publishResponse.status}.`,
     };
   }
@@ -265,7 +269,7 @@ async function publishToInstagram(
   return {
     success: true,
     externalPostId: String(publishData.id),
-    response: sanitizeResponse(publishData),
+    response: sanitizeResponse(publishData, [accessToken]),
   };
 }
 
@@ -353,7 +357,8 @@ async function publishToLinkedIn(
  * before storing API responses in the database.
  */
 function sanitizeResponse(
-  value: unknown
+  value: unknown,
+  additionalSecrets: string[] = [],
 ): Record<string, unknown> {
   if (!value || typeof value !== "object") {
     return {};
@@ -381,7 +386,7 @@ function sanitizeResponse(
       const current = object[key];
 
       if (typeof current === "string") {
-        object[key] = sanitizeText(current);
+        object[key] = sanitizeText(current, additionalSecrets);
         continue;
       }
 
@@ -623,8 +628,10 @@ export async function publishNextMarketingItem(): Promise<{
   const configuredPlatforms: Platform[] = isMetricoolEnabled()
     ? (process.env.METRICOOL_PLATFORMS || "facebook,instagram,linkedin").split(",").map((value) => value.trim()).filter((value): value is Platform => ["facebook", "instagram", "linkedin"].includes(value as Platform))
     : (["instagram", "facebook", "linkedin"] as Platform[]).filter((platform) => {
-        if (platform === "facebook") return metaCanPublish(facebookHealth.status) && !getFacebookCredentialError(process.env.FACEBOOK_PAGE_ID, process.env.FACEBOOK_PAGE_ACCESS_TOKEN);
-        if (platform === "instagram") return metaCanPublish(instagramHealth.status) && Boolean(process.env.INSTAGRAM_USER_ID && process.env.INSTAGRAM_ACCESS_TOKEN);
+        if (platform === "facebook") return metaCanPublish(facebookHealth.status) &&
+          (process.env.META_TOKEN_VAULT_ENABLED === "true" || !getFacebookCredentialError(process.env.FACEBOOK_PAGE_ID, process.env.FACEBOOK_PAGE_ACCESS_TOKEN));
+        if (platform === "instagram") return metaCanPublish(instagramHealth.status) &&
+          (process.env.META_TOKEN_VAULT_ENABLED === "true" || Boolean(getInstagramBusinessAccountId() && process.env.INSTAGRAM_ACCESS_TOKEN));
         return Boolean(process.env.LINKEDIN_ACCESS_TOKEN && process.env.LINKEDIN_AUTHOR_URN);
       });
   const safePlatforms = configuredPlatforms.filter((platform) =>

@@ -19,6 +19,12 @@ test("marketing queue excludes Facebook and Instagram for every rejected token s
       "@/lib/marketing-auth": { isMarketingItemPublishAuthorized: () => true },
       "@/lib/marketing-media": { getTrustedProductCoverUrl: (url) => url },
       "@/lib/facebook-credentials": { getFacebookCredentialError: () => null },
+      "@/lib/meta-credentials": { getInstagramBusinessAccountId: () => process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID || process.env.INSTAGRAM_USER_ID || null },
+      "@/lib/meta-token-vault": {
+        getMetaPublishCredentials: async (platform) => platform === "facebook"
+          ? { id: process.env.FACEBOOK_PAGE_ID, accessToken: process.env.FACEBOOK_PAGE_ACCESS_TOKEN }
+          : { id: process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID || process.env.INSTAGRAM_USER_ID, accessToken: process.env.INSTAGRAM_ACCESS_TOKEN },
+      },
       "@/lib/meta-token-health": { getMetaTokenHealth: async () => ({ status, expiresAt: null }), isMetaTokenPublishAllowed: (value) => value === "valid" || value === "expiring" },
     };
     const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
@@ -29,4 +35,3 @@ test("marketing queue excludes Facebook and Instagram for every rejected token s
     assert.equal(JSON.stringify(platforms), "[]");
   }
 });
-

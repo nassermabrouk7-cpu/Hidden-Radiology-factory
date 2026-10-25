@@ -5,6 +5,8 @@ import { publishToFacebook } from "@/lib/channels/facebook";
 import { publishToInstagram } from "@/lib/channels/instagram";
 import { getFacebookCredentialError } from "@/lib/facebook-credentials";
 import { getMetaTokenHealth, isMetaTokenPublishAllowed, type MetaTokenHealth } from "@/lib/meta-token-health";
+import { getInstagramBusinessAccountId } from "@/lib/meta-credentials";
+import { getMetaPublishCredentials } from "@/lib/meta-token-vault";
 import { isCronBearerAuthorized } from "@/lib/marketing-auth";
 import { getTrustedProductCoverUrl } from "@/lib/marketing-media";
 import { makeSalesCaption } from "@/lib/product-publishing";
@@ -52,12 +54,12 @@ function channelConfigured(channel: Channel, metaHealth?: MetaTokenHealth): bool
     return Boolean(process.env.TELEGRAM_BOT_TOKEN && channelsConfig.telegram.chat_id);
   }
   if (channel === "facebook") {
-    return (!metaHealth || isMetaTokenPublishAllowed(metaHealth.status)) && !getFacebookCredentialError(process.env.FACEBOOK_PAGE_ID, process.env.FACEBOOK_PAGE_ACCESS_TOKEN);
+    return (!metaHealth || isMetaTokenPublishAllowed(metaHealth.status)) &&
+      (process.env.META_TOKEN_VAULT_ENABLED === "true" || !getFacebookCredentialError(process.env.FACEBOOK_PAGE_ID, process.env.FACEBOOK_PAGE_ACCESS_TOKEN));
   }
   return Boolean(
     (!metaHealth || isMetaTokenPublishAllowed(metaHealth.status)) &&
-    /^\d{10,20}$/.test(process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID || "") &&
-    process.env.INSTAGRAM_ACCESS_TOKEN,
+    (process.env.META_TOKEN_VAULT_ENABLED === "true" || (getInstagramBusinessAccountId() && process.env.INSTAGRAM_ACCESS_TOKEN)),
   );
 }
 
@@ -108,7 +110,11 @@ async function publishSelected(channel: Channel, product: Product, imageUrl: str
   try {
     if (channel === "telegram") return publishTelegram(imageUrl, caption, buyUrl);
     if (channel === "facebook") {
-      const result = await publishToFacebook(process.env.FACEBOOK_PAGE_ID!, process.env.FACEBOOK_PAGE_ACCESS_TOKEN!, {
+      const credentials = await getMetaPublishCredentials("facebook");
+      if (!credentials || getFacebookCredentialError(credentials.id, credentials.accessToken)) {
+        return { success: false, error: "Facebook Page credentials are missing or malformed." };
+      }
+      const result = await publishToFacebook(credentials.id, credentials.accessToken, {
         message: caption,
         image_url: imageUrl,
       });
@@ -116,9 +122,13 @@ async function publishSelected(channel: Channel, product: Product, imageUrl: str
         ? { success: true, externalId: result.postId }
         : { success: false, error: safeError(result.error || "Facebook did not return a post ID.") };
     }
+    const credentials = await getMetaPublishCredentials("instagram");
+    if (!credentials || !/^\d{10,20}$/.test(credentials.id)) {
+      return { success: false, error: "Instagram business account credentials are missing or malformed." };
+    }
     const result = await publishToInstagram(
-      process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID!,
-      process.env.INSTAGRAM_ACCESS_TOKEN!,
+      credentials.id,
+      credentials.accessToken,
       { imageUrl, caption },
     );
     return result.success && result.postId

@@ -16,15 +16,25 @@
 
 ## النشر التسويقي التلقائي
 
-يشغّل `vercel.json` المسار `/api/publish-all?auto=true` يومياً عند 07:00 UTC لنشر منتجات المتجر من جدول `products` مع أغلفتها وروابط شرائها. لا نُجدول `/api/marketing/cron` حاليًا لتجنب تداخل منشورات الطابور مع ترويج المنتج اليومي؛ يمكن معالجة الطابور يدويًا عبر `POST /api/marketing/publish`. يجب تطبيق ترحيلات التسويق في `supabase/migrations` قبل استخدام الطابور.
+يشغّل `vercel.json` مسار المنتجات `/api/publish-all?auto=true` يوميًا عند 07:00 UTC. يحمي `CRON_SECRET` هذا المسار بمصادقة Bearer، ويمنع سجل ذري في Supabase تكرار تشغيل اليوم. يجب تهيئة `NEXT_PUBLIC_SUPABASE_URL` و`SUPABASE_SERVICE_ROLE_KEY`، وقنوات المتجر التي تريد تفعيلها، وإعدادات المنتج والصورة. لا يؤدي غياب إعداد Meta أو عدم صلاحية رمزه إلى نشر مزعوم؛ تُسجّل القناة كمتوقفة، وتستمر القنوات الأخرى الجاهزة مثل Telegram. إعادة المحاولة في يوم لاحق تستبعد القنوات الناجحة.
 
-يتطلب النشر الفعلي ضبط `MARKETING_AUTO_PUBLISH=true` في بيئة Vercel، و`CRON_SECRET` بطول 32 حرفاً على الأقل، واعتماد تكامل المنصة المطلوب. يظل اعتماد كل عنصر من لوحة الإدارة شرطاً للنشر؛ العناصر المولدة تبدأ بحالة `queued` ولا تُنشر تلقائياً قبل مراجعتها واعتمادها. تكامل Metricool مدفوع ويتطلب تفعيل `MARKETING_ALLOW_PAID_METRICOOL_API=true` صراحةً مع إعداد بياناته.
+لا تُضف جدولة لمسار `/api/marketing/cron` بالتوازي مع ناشر المنتجات. هذا المسار يخص طابور التسويق فقط، ويظل غير مجدول؛ يتطلب `MARKETING_AUTO_PUBLISH=true` بشكل منفصل، ومصادقة Bearer عبر `CRON_SECRET`، واعتماد العناصر من لوحة الإدارة. يمكن معالجة الطابور يدويًا عبر `POST /api/marketing/publish`. لا يفعّل `MARKETING_AUTO_PUBLISH` نشر منتجات المتجر. تتطلب ترحيلات `supabase/migrations` استخدام الطابور أو قفل النشر اليومي. تكامل Metricool مدفوع ويتطلب تفعيل `MARKETING_ALLOW_PAID_METRICOOL_API=true` صراحةً مع إعداد بياناته.
+
+## ربط Meta وصحة الرموز
+
+تتطلب مراجعة Facebook وInstagram إعداد `META_APP_ID` و`META_APP_SECRET` والرمز/الرموز الحالية، وإعدادات Page وInstagram المهنية. يعرض `/api/cron/meta-token-health` الحالة الآمنة لكل رمز ويرسل تنبيهًا عند الحاجة؛ يتطلب البريد `RESEND_API_KEY` و`RESEND_FROM_EMAIL` و`META_TOKEN_ALERT_EMAIL` وقاعدة التنبيهات. الأعطال المؤقتة الواضحة للفحص تسمح بمحاولة النشر فقط عند وجود إعدادات التطبيق والرمز؛ أما الرموز المرفوضة أو المنتهية أو المعلومات غير المفهومة فتُحظر.
+
+يبدأ الربط الإداري عبر `GET /api/meta/oauth/start` بعد تسجيل الدخول إلى الإدارة. عيّن `META_OAUTH_REDIRECT_URI` إلى عنوان callback نفسه (`/api/meta/oauth/callback`) وسجّله في إعدادات Facebook Login، ووفّر مفتاحًا عشوائيًا base64 يمثل 32 بايت في `META_TOKEN_ENCRYPTION_KEY`. بعد تطبيق ترحيل مخزن Meta المشفّر وإتمام ربط Meta والتحقق منه يدويًا، يمكن تفعيل `META_TOKEN_VAULT_ENABLED=true`. يبقى معطلًا افتراضيًا؛ لا تعتبره مُفعّلًا أو مجددًا آليًا قبل إتمام تدفق OAuth الحقيقي والتحقق من الرموز والحسابات. إذا لم تقبل Meta تجديد رمز ما زال صالحًا، يوقف النظام المحاولة المتكررة ويطلب إعادة تفويض المسؤول.
+
+يقبل ناشر Instagram اسم `INSTAGRAM_BUSINESS_ACCOUNT_ID`، كما يقبل `INSTAGRAM_USER_ID` القديم فقط إذا كان مطابقًا له؛ احذف الاسم القديم أو اجعله مطابقًا لتجنب تعارض معرّف الحساب.
 
 تأكد من إعداد الأسرار في بيئة Production، وأن النشر التلقائي لـGit متصل بمستودع GitHub في إعدادات مشروع Vercel. لا يمكن تأكيد حالة هذه الإعدادات الخارجية من فحص المستودع وحده.
 
 ## قاعدة البيانات والملفات
 
 قبل تفعيل تسليم الكتب، شغّل `supabase/migrations/202610060001_secure_pdf_bucket.sql` من Supabase SQL Editor. يجعل هذا التغيير حاوية `pdfs` خاصة؛ ويرسل الخادم روابط تنزيل مؤقتة بعد تأكيد الدفع.
+
+قبل تطبيق أي ترحيل، شغّل `node scripts/check-migration-ids.cjs` للتأكد من تفرد الأرقام. لا تعِد ترقيم ترحيل موجود قبل مقارنة `supabase migration list` مع سجل `supabase_migrations.schema_migrations` للمشروع البعيد؛ يلزم توفر مصادقة Supabase واتصال المشروع لهذا الفحص.
 
 تأكد أن كل `products.pdf_url` يشير إلى ملف موجود في حاوية `pdfs`، وأن جدول `orders` يدعم الحقول المستخدمة في إنشاء الطلبات: `reference_id`, `customer_name`, `customer_email`, `customer_phone`, `items`, `total_amount`, `payment_method`, `language`, `status`, و`confirmed_at`.
 

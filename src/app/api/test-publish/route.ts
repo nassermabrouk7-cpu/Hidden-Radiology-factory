@@ -7,6 +7,8 @@ import { publishToLinkedIn } from '@/lib/channels/linkedin';
 import { isCronBearerAuthorized } from '@/lib/marketing-auth';
 import { getFacebookCredentialError } from '@/lib/facebook-credentials';
 import { getMetaTokenHealth, isMetaTokenPublishAllowed, type MetaTokenHealth } from '@/lib/meta-token-health';
+import { getInstagramBusinessAccountId } from '@/lib/meta-credentials';
+import { getMetaPublishCredentials } from '@/lib/meta-token-vault';
 
 interface PublishRequest {
   bookId?: string;
@@ -131,8 +133,10 @@ export async function POST(request: NextRequest) {
           : false;
         let configured = false;
         if (channel === 'telegram') configured = Boolean(process.env.TELEGRAM_BOT_TOKEN);
-        if (channel === 'facebook') configured = metaCanPublish(metaHealth.facebook?.status) && !getFacebookCredentialError(process.env.FACEBOOK_PAGE_ID, process.env.FACEBOOK_PAGE_ACCESS_TOKEN);
-        if (channel === 'instagram') configured = metaCanPublish(metaHealth.instagram?.status) && Boolean(process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID && process.env.INSTAGRAM_ACCESS_TOKEN);
+        if (channel === 'facebook') configured = metaCanPublish(metaHealth.facebook?.status) &&
+          (process.env.META_TOKEN_VAULT_ENABLED === 'true' || !getFacebookCredentialError(process.env.FACEBOOK_PAGE_ID, process.env.FACEBOOK_PAGE_ACCESS_TOKEN));
+        if (channel === 'instagram') configured = metaCanPublish(metaHealth.instagram?.status) &&
+          (process.env.META_TOKEN_VAULT_ENABLED === 'true' || Boolean(getInstagramBusinessAccountId() && process.env.INSTAGRAM_ACCESS_TOKEN));
         if (channel === 'threads') configured = Boolean(process.env.THREADS_USER_ID && process.env.THREADS_ACCESS_TOKEN);
         if (channel === 'linkedin') configured = Boolean(process.env.LINKEDIN_ORGANIZATION_ID && process.env.LINKEDIN_ACCESS_TOKEN);
         return { channel, enabled, configured, status: !enabled ? 'disabled' : configured ? 'would_publish' : 'not_configured' };
@@ -196,20 +200,19 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        const fbPageId = process.env[channelsConfig.facebook.page_id_env];
-        const fbAccessToken = process.env[channelsConfig.facebook.access_token_env];
+        const credentials = await getMetaPublishCredentials('facebook');
 
-        if (!fbPageId || !fbAccessToken) {
+        if (!credentials || getFacebookCredentialError(credentials.id, credentials.accessToken)) {
           results.push({
             channel: 'facebook',
             success: false,
             message: 'Facebook credentials missing',
-            error: 'FACEBOOK_PAGE_ID or FACEBOOK_PAGE_ACCESS_TOKEN not configured'
+            error: 'Facebook Page credentials are missing or malformed'
           });
           continue;
         }
 
-        const fbResult = await publishToFacebook(fbPageId, fbAccessToken, {
+        const fbResult = await publishToFacebook(credentials.id, credentials.accessToken, {
           message: `${title_en || title_ar}\n\n${description_en || description_ar}\n\n${buyUrl}`,
           link: buyUrl,
           image_url: imageUrl,
@@ -236,20 +239,19 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        const igAccountId = process.env[channelsConfig.instagram.business_account_id_env];
-        const igAccessToken = process.env[channelsConfig.instagram.access_token_env];
+        const credentials = await getMetaPublishCredentials('instagram');
 
-        if (!igAccountId || !igAccessToken) {
+        if (!credentials || !/^\d{10,20}$/.test(credentials.id)) {
           results.push({
             channel: 'instagram',
             success: false,
             message: 'Instagram credentials missing',
-            error: 'INSTAGRAM_BUSINESS_ACCOUNT_ID or FACEBOOK_PAGE_ACCESS_TOKEN not configured'
+            error: 'Instagram business account credentials are missing or malformed'
           });
           continue;
         }
 
-        const igResult = await publishToInstagram(igAccountId, igAccessToken, {
+        const igResult = await publishToInstagram(credentials.id, credentials.accessToken, {
           imageUrl: imageUrl,
           caption: `${title_en || title_ar}\n\n${description_en || description_ar}\n\n${buyUrl}`,
         });
@@ -408,5 +410,3 @@ export async function GET(request: NextRequest) {
     }
   });
 }
-
-

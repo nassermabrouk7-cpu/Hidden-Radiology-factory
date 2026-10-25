@@ -8,7 +8,7 @@ const ts = require("typescript");
 const routeSource = readFileSync(resolve(__dirname, "../src/app/api/publish-one/route.ts"), "utf8");
 const channelsConfig = require("../src/channels.config.json");
 
-function makeDatabase(product, priorCampaigns = []) {
+function makeDatabase(product, priorCampaigns = [], failUpdates = false) {
   const db = { reads: [], writes: [], campaigns: [...priorCampaigns], nextId: 1 };
   db.from = (table) => {
     const query = { table, operation: "select", row: null, updateValues: null, filters: {} };
@@ -47,6 +47,9 @@ function makeDatabase(product, priorCampaigns = []) {
     };
     query.then = (resolvePromise, rejectPromise) => {
       if (query.operation === "update") {
+        if (failUpdates) {
+          return Promise.resolve({ data: null, error: { message: "simulated persistence failure" } }).then(resolvePromise, rejectPromise);
+        }
         const campaign = db.campaigns.find(({ id }) => id === query.filters.id);
         if (campaign) Object.assign(campaign, query.updateValues);
         return Promise.resolve({ data: null, error: null }).then(resolvePromise, rejectPromise);
@@ -77,10 +80,16 @@ function makeRoute({ database, providerCalls, fetchCalls, providerResults = {}, 
     "@/channels.config.json": { default: channelsConfig },
     "@/lib/channels/facebook": { publishToFacebook: async () => { providerCalls.push("facebook"); return providerResults.facebook || { success: true, postId: "fb-post" }; } },
     "@/lib/channels/instagram": { publishToInstagram: async () => { providerCalls.push("instagram"); return providerResults.instagram || { success: true, postId: "ig-post" }; } },
-    "@/lib/facebook-credentials": { getFacebookCredentialError: () => null },
+    "@/lib/facebook-credentials": { getFacebookCredentialError: (pageId, accessToken) => pageId && accessToken ? null : "Facebook credentials are missing." },
+    "@/lib/meta-credentials": { getInstagramBusinessAccountId: () => process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID || process.env.INSTAGRAM_USER_ID || null },
+    "@/lib/meta-token-vault": {
+      getMetaPublishCredentials: async (channel) => channel === "facebook"
+        ? { id: process.env.FACEBOOK_PAGE_ID, accessToken: process.env.FACEBOOK_PAGE_ACCESS_TOKEN }
+        : { id: process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID || process.env.INSTAGRAM_USER_ID, accessToken: process.env.INSTAGRAM_ACCESS_TOKEN },
+    },
     "@/lib/meta-token-health": {
       getMetaTokenHealth: async () => ({ status: metaStatus, expiresAt: null }),
-      isMetaTokenPublishAllowed: (status) => ["valid", "expiring"].includes(status),
+      isMetaTokenPublishAllowed: (status) => ["valid", "expiring", "unavailable"].includes(status),
     },
     "@/lib/marketing-auth": { isCronBearerAuthorized: (request) => request.headers.get("authorization") === `Bearer ${process.env.CRON_SECRET}` },
     "@/lib/marketing-media": { getTrustedProductCoverUrl: (url) => url },
@@ -175,11 +184,11 @@ test("publish-one dry run validates the product and channel without publisher ca
   assert.deepEqual(fetches.map(({ method }) => method), ["HEAD"]);
 });
 
-test("publish-one blocks Meta publishing for invalid, expired, unknown, unavailable, and unconfigured health", async (t) => {
+test("publish-one blocks Meta publishing for invalid, expired, unknown, and unconfigured health", async (t) => {
   const previous = Object.fromEntries(["CRON_SECRET", "FACEBOOK_PAGE_ID", "FACEBOOK_PAGE_ACCESS_TOKEN"].map((name) => [name, process.env[name]]));
   t.after(() => Object.entries(previous).forEach(([name, value]) => value === undefined ? delete process.env[name] : process.env[name] = value));
   Object.assign(process.env, { CRON_SECRET: "c".repeat(32), FACEBOOK_PAGE_ID: "1234567890123456", FACEBOOK_PAGE_ACCESS_TOKEN: "fake-token" });
-  for (const metaStatus of ["invalid", "expired", "unknown", "unavailable", "not_configured"]) {
+  for (const metaStatus of ["invalid", "expired", "unknown", "not_configured"]) {
     const database = makeDatabase(product);
     const providers = [];
     const route = makeRoute({ database, providerCalls: providers, fetchCalls: [], metaStatus });
@@ -189,6 +198,24 @@ test("publish-one blocks Meta publishing for invalid, expired, unknown, unavaila
     assert.deepEqual(database.writes, []);
     assert.deepEqual(providers, []);
   }
+});
+
+test("publish-one permits an explicitly transient health outage only with configured credentials", async (t) => {
+  const names = ["CRON_SECRET", "NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "FACEBOOK_PAGE_ID", "FACEBOOK_PAGE_ACCESS_TOKEN"];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  t.after(() => names.forEach((name) => previous[name] === undefined ? delete process.env[name] : process.env[name] = previous[name]));
+  Object.assign(process.env, { CRON_SECRET: "c".repeat(32), NEXT_PUBLIC_SUPABASE_URL: "https://project.example.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "test-key", FACEBOOK_PAGE_ID: "1234567890123456", FACEBOOK_PAGE_ACCESS_TOKEN: "test-token" });
+  const database = makeDatabase(product);
+  const providers = [];
+  const route = makeRoute({ database, providerCalls: providers, fetchCalls: [], metaStatus: "unavailable" });
+  const response = await route.POST(request({ productId: product.id, channel: "facebook", publish: true }));
+  assert.equal(response.status, 200);
+  assert.deepEqual(providers, ["facebook"]);
+
+  delete process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
+  const notConfigured = makeRoute({ database: makeDatabase(product), providerCalls: [], fetchCalls: [], metaStatus: "unavailable" });
+  const blocked = await notConfigured.POST(request({ productId: product.id, channel: "facebook", publish: true }));
+  assert.equal(blocked.status, 503);
 });
 
 test("publish-one invokes only the explicitly selected publisher and records its verified ID", async (t) => {
@@ -269,6 +296,21 @@ test("publish-one records provider failures as failures, never as completed", as
   assert.equal(database.campaigns[0].metadata.channel_results.facebook.success, false);
   assert.equal(database.campaigns[0].metadata.attempt_in_progress, false);
   assert.equal("externalId" in database.campaigns[0].metadata.channel_results.facebook, false);
+  assert.deepEqual(providers, ["facebook"]);
+});
+
+test("publish-one leaves provider-success persistence failures in manual-reconciliation state", async (t) => {
+  const previous = Object.fromEntries(["CRON_SECRET", "NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "FACEBOOK_PAGE_ID", "FACEBOOK_PAGE_ACCESS_TOKEN"].map((name) => [name, process.env[name]]));
+  t.after(() => Object.entries(previous).forEach(([name, value]) => value === undefined ? delete process.env[name] : process.env[name] = value));
+  Object.assign(process.env, { CRON_SECRET: "c".repeat(32), NEXT_PUBLIC_SUPABASE_URL: "https://project.example.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "test-key", FACEBOOK_PAGE_ID: "1234567890123456", FACEBOOK_PAGE_ACCESS_TOKEN: "test-token" });
+  const database = makeDatabase(product, [], true);
+  const providers = [];
+  const route = makeRoute({ database, providerCalls: providers, fetchCalls: [] });
+  const response = await route.POST(request({ productId: product.id, channel: "facebook", publish: true }));
+  assert.equal(response.status, 502);
+  assert.equal(response.body.providerSucceeded, true);
+  assert.equal(response.body.persistence.success, false);
+  assert.equal(database.campaigns[0].metadata.attempt_in_progress, true);
   assert.deepEqual(providers, ["facebook"]);
 });
 

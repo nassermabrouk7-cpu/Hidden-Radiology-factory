@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import channelsConfig from "@/channels.config.json";
 import { getFacebookCredentialError } from "@/lib/facebook-credentials";
 import { getMetaTokenHealth, isMetaTokenPublishAllowed, type MetaTokenHealth } from "@/lib/meta-token-health";
+import { getInstagramBusinessAccountId } from "@/lib/meta-credentials";
+import { getMetaPublishCredentials } from "@/lib/meta-token-vault";
 import { publishToFacebook } from "@/lib/channels/facebook";
 import { publishToInstagram } from "@/lib/channels/instagram";
 import { publishToLinkedIn } from "@/lib/channels/linkedin";
@@ -12,7 +14,9 @@ import { getTrustedProductCoverUrl } from "@/lib/marketing-media";
 import {
   getCampaignStatus,
   canRetryCampaign,
+  claimDailyProductPublishRun,
   countsTowardProductCooldown,
+  getRequiredCampaignChannels,
   getChannelsToPublish,
   getRetryMetadata,
   makeSalesCaption,
@@ -35,7 +39,7 @@ type Product = {
   category?: string | null;
   cover_url: string | null;
 };
-type PublishOutcome = { success: boolean; externalId?: string; error?: string };
+type PublishOutcome = { success: boolean; externalId?: string; error?: string; status?: "not_configured" };
 type Channel = "telegram" | "facebook" | "instagram" | "threads" | "linkedin";
 
 function getSupabase() {
@@ -62,15 +66,18 @@ function enabledChannels(): Channel[] {
     .filter((channel) => Boolean(channelsConfig[channel]?.enabled));
 }
 
+function requiredChannels(metadata: Record<string, unknown> | null | undefined, enabled: Channel[]): Channel[] {
+  return getRequiredCampaignChannels(metadata, enabled).filter((channel): channel is Channel => {
+    return ["telegram", "facebook", "instagram", "threads", "linkedin"].includes(channel);
+  });
+}
+
 function channelConfigured(channel: Channel, metaHealth: Partial<Record<"facebook" | "instagram", MetaTokenHealth>>): boolean {
   if (channel === "telegram") return Boolean(process.env.TELEGRAM_BOT_TOKEN && channelsConfig.telegram.chat_id);
-  if (channel === "facebook") return (metaHealth.facebook !== undefined && isMetaTokenPublishAllowed(metaHealth.facebook.status)) && !getFacebookCredentialError(
-    process.env.FACEBOOK_PAGE_ID,
-    process.env.FACEBOOK_PAGE_ACCESS_TOKEN,
-  );
-  if (channel === "instagram") return (metaHealth.instagram !== undefined && isMetaTokenPublishAllowed(metaHealth.instagram.status)) && Boolean(
-    /^\d{10,20}$/.test(process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID || "") && process.env.INSTAGRAM_ACCESS_TOKEN,
-  );
+  if (channel === "facebook") return (metaHealth.facebook !== undefined && isMetaTokenPublishAllowed(metaHealth.facebook.status)) &&
+    (process.env.META_TOKEN_VAULT_ENABLED === "true" || !getFacebookCredentialError(process.env.FACEBOOK_PAGE_ID, process.env.FACEBOOK_PAGE_ACCESS_TOKEN));
+  if (channel === "instagram") return (metaHealth.instagram !== undefined && isMetaTokenPublishAllowed(metaHealth.instagram.status)) &&
+    (process.env.META_TOKEN_VAULT_ENABLED === "true" || Boolean(getInstagramBusinessAccountId() && process.env.INSTAGRAM_ACCESS_TOKEN));
   if (channel === "threads") return Boolean(process.env.THREADS_USER_ID && process.env.THREADS_ACCESS_TOKEN);
   return Boolean(process.env.LINKEDIN_ORGANIZATION_ID && process.env.LINKEDIN_ACCESS_TOKEN);
 }
@@ -130,13 +137,21 @@ async function publishOne(channel: Channel, imageUrl: string, caption: string, b
   try {
     if (channel === "telegram") return publishTelegram(process.env.TELEGRAM_BOT_TOKEN!, imageUrl, caption, buyUrl);
     if (channel === "facebook") {
-      const result = await publishToFacebook(process.env.FACEBOOK_PAGE_ID!, process.env.FACEBOOK_PAGE_ACCESS_TOKEN!, {
+      const credentials = await getMetaPublishCredentials("facebook");
+      if (!credentials || getFacebookCredentialError(credentials.id, credentials.accessToken)) {
+        return { success: false, status: "not_configured", error: "Facebook Page credentials are missing or malformed." };
+      }
+      const result = await publishToFacebook(credentials.id, credentials.accessToken, {
         message: caption, image_url: imageUrl,
       });
       return { success: result.success && Boolean(result.postId), externalId: result.postId, error: result.success ? undefined : safeError(result.error) };
     }
     if (channel === "instagram") {
-      const result = await publishToInstagram(process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID!, process.env.INSTAGRAM_ACCESS_TOKEN!, { imageUrl, caption });
+      const credentials = await getMetaPublishCredentials("instagram");
+      if (!credentials || !/^\d{10,20}$/.test(credentials.id)) {
+        return { success: false, status: "not_configured", error: "Instagram business account credentials are missing or malformed." };
+      }
+      const result = await publishToInstagram(credentials.id, credentials.accessToken, { imageUrl, caption });
       return { success: result.success && Boolean(result.postId), externalId: result.postId, error: result.success ? undefined : safeError(result.error) };
     }
     if (channel === "threads") {
@@ -150,7 +165,12 @@ async function publishOne(channel: Channel, imageUrl: string, caption: string, b
   }
 }
 
-async function findRetryableCampaign(supabase: ReturnType<typeof getSupabase>) {
+async function findRetryableCampaign(
+  supabase: ReturnType<typeof getSupabase>,
+  channels: Channel[],
+  readyChannels: Channel[],
+  products: Array<{ product: Product; imageUrl: string }>,
+) {
   const { data, error } = await supabase.from("marketing_campaigns")
     .select("id, product_id, metadata, status, created_at")
     .in("status", ["ready", "active"])
@@ -159,7 +179,10 @@ async function findRetryableCampaign(supabase: ReturnType<typeof getSupabase>) {
   if (error) throw new Error("Could not inspect existing publishing campaigns.");
   return (data || []).find((campaign) => {
     const meta = campaign.metadata && typeof campaign.metadata === "object" ? campaign.metadata as Record<string, unknown> : {};
-    return meta.auto_publish === true && canRetryCampaign(meta, MAX_ATTEMPTS);
+    if (meta.auto_publish !== true || !canRetryCampaign(meta, MAX_ATTEMPTS, channels)) return false;
+    if (!products.some(({ product }) => String(product.id) === String(campaign.product_id))) return false;
+    const pending = getChannelsToPublish(requiredChannels(meta, channels), getRetryMetadata(meta).results);
+    return pending.some((channel) => readyChannels.includes(channel));
   }) || null;
 }
 
@@ -179,25 +202,26 @@ async function loadValidProducts(supabase: ReturnType<typeof getSupabase>): Prom
   return valid;
 }
 
-async function handlePublish(request: NextRequest, payload: Record<string, unknown>) {
+async function handlePublish(request: NextRequest, payload: Record<string, unknown>, supabase = getSupabase()) {
   const autoMode = request.nextUrl.searchParams.get("auto") === "true" || payload.auto === true;
   const dryRun = request.nextUrl.searchParams.get("dry_run") === "true" || payload.dryRun === true;
   const metaHealth = {
     facebook: await getMetaTokenHealth("facebook"),
     instagram: await getMetaTokenHealth("instagram"),
   };
-  const supabase = getSupabase();
   const channels = enabledChannels();
   if (!channels.length) return NextResponse.json({ success: false, error: "No direct publisher channels are enabled." }, { status: 503 });
 
-  const retryCampaign = autoMode && !dryRun ? await findRetryableCampaign(supabase) : null;
   const products = await loadValidProducts(supabase);
+  const readyChannels = channels.filter((channel) => channelConfigured(channel, metaHealth));
+  const retryCampaign = autoMode && !dryRun
+    ? await findRetryableCampaign(supabase, channels, readyChannels, products)
+    : null;
   let selected: { product: Product; imageUrl: string } | undefined;
   let campaignId: string | null = retryCampaign?.id || null;
 
   if (retryCampaign) {
     selected = products.find(({ product }) => String(product.id) === String(retryCampaign.product_id));
-    if (!selected) return NextResponse.json({ success: false, error: "The product for a pending campaign is no longer active or has an invalid cover." }, { status: 409 });
   } else if (payload.bookId) {
     selected = products.find(({ product }) => String(product.id) === String(payload.bookId));
   } else {
@@ -218,6 +242,29 @@ async function handlePublish(request: NextRequest, payload: Record<string, unkno
     selected = candidates[Math.floor(Math.random() * candidates.length)];
   }
 
+  const retryMetadata = retryCampaign
+    ? getRetryMetadata(retryCampaign.metadata as Record<string, unknown>)
+    : { attempts: 0, results: {} as ChannelPublishRecords };
+  const priorMeta = retryCampaign?.metadata && typeof retryCampaign.metadata === "object"
+    ? retryCampaign.metadata as Record<string, unknown>
+    : {};
+  const campaignChannels = requiredChannels(priorMeta, channels);
+
+  if (!selected && readyChannels.length === 0) {
+    return NextResponse.json({
+      success: false,
+      status: "skipped",
+      reason: "No enabled publishing channel is currently ready.",
+      channels: campaignChannels.map((channel) => ({
+        channel,
+        success: false,
+        status: "not_configured",
+        error: "The channel is enabled, but its required credentials or verified token are unavailable.",
+      })),
+      campaignId: null,
+      publicationAttempted: false,
+    }, { status: 503 });
+  }
   if (!selected) return NextResponse.json({ success: false, error: "No active product with a valid price and public cover is available." }, { status: 404 });
   const { product, imageUrl } = selected;
   const invalid = validateProduct(product);
@@ -225,10 +272,7 @@ async function handlePublish(request: NextRequest, payload: Record<string, unkno
 
   const buyUrl = purchaseUrl(String(product.id));
   const caption = makeSalesCaption({ ...product, price: Number(product.price) }, buyUrl);
-  const retryMetadata = retryCampaign
-    ? getRetryMetadata(retryCampaign.metadata as Record<string, unknown>)
-    : { attempts: 0, results: {} as ChannelPublishRecords };
-  const channelsToRun = getChannelsToPublish(channels.filter((channel) => channelConfigured(channel, metaHealth)), retryMetadata.results);
+  const channelsToRun = getChannelsToPublish(campaignChannels, retryMetadata.results);
 
   if (dryRun) {
     return NextResponse.json({
@@ -242,16 +286,32 @@ async function handlePublish(request: NextRequest, payload: Record<string, unkno
         channel,
         enabled: true,
         configured: channelConfigured(channel, metaHealth),
-        status: !channelConfigured(channel, metaHealth) ? "not_configured" : channelsToRun.includes(channel) ? "would_publish" : "already_published",
+        success: retryMetadata.results[channel]?.success === true,
+        status: !channelConfigured(channel, metaHealth)
+          ? "not_configured"
+          : retryMetadata.results[channel]?.success === true ? "already_published" : "would_publish",
       })),
       campaignId,
       externalPostsCreated: false,
     });
   }
 
-  const priorMeta = retryCampaign?.metadata && typeof retryCampaign.metadata === "object"
-    ? retryCampaign.metadata as Record<string, unknown>
-    : {};
+  const channelsReadyToRun = channelsToRun.filter((channel) => readyChannels.includes(channel));
+  if (channelsReadyToRun.length === 0) {
+    return NextResponse.json({
+      success: false,
+      status: "skipped",
+      reason: "All remaining channels are waiting for configuration or token recovery.",
+      channels: campaignChannels.map((channel) => ({
+        channel,
+        success: retryMetadata.results[channel]?.success === true,
+        status: retryMetadata.results[channel]?.success === true ? "published" : "not_configured",
+        ...(retryMetadata.results[channel]?.success === true ? {} : { error: "The channel is not currently ready to publish." }),
+      })),
+      campaignId,
+      publicationAttempted: false,
+    }, { status: 503 });
+  }
   const nextAttempt = retryMetadata.attempts + 1;
   if (!retryCampaign) {
     const title = product.title_en?.trim() || product.title_ar?.trim() || "Product promotion";
@@ -264,7 +324,7 @@ async function handlePublish(request: NextRequest, payload: Record<string, unkno
       theme: `${title} product promotion`,
       language_strategy: "ar+en",
       status: "ready",
-      metadata: { auto_publish: autoMode, attempts: 0, channel_results: {}, retry_exhausted: false, image_url: imageUrl, destination_url: buyUrl },
+      metadata: { auto_publish: autoMode, attempts: 0, required_channels: channels, channel_results: {}, retry_exhausted: false, image_url: imageUrl, destination_url: buyUrl },
     }).select("id").single();
     if (error || !inserted) return NextResponse.json({ success: false, error: "Could not create the campaign record; no social posts were sent.", publishing: { success: false }, persistence: { success: false } }, { status: 500 });
     campaignId = inserted.id;
@@ -275,6 +335,7 @@ async function handlePublish(request: NextRequest, payload: Record<string, unkno
   const startMetadata = {
     ...priorMeta,
     auto_publish: autoMode || priorMeta.auto_publish === true,
+    required_channels: campaignChannels,
     attempts: nextAttempt,
     channel_results: retryMetadata.results,
     retry_exhausted: false,
@@ -291,10 +352,12 @@ async function handlePublish(request: NextRequest, payload: Record<string, unkno
   }
 
   const results: ChannelPublishRecords = { ...retryMetadata.results };
-  for (const channel of channelsToRun as Channel[]) {
-    results[channel] = await publishOne(channel, imageUrl, caption, buyUrl, metaHealth);
+  for (const channel of channelsToRun) {
+    results[channel] = readyChannels.includes(channel) && channelConfigured(channel, metaHealth)
+      ? await publishOne(channel, imageUrl, caption, buyUrl, metaHealth)
+      : { success: false, status: "not_configured", error: "The channel is enabled, but its credentials or verified token are unavailable." };
   }
-  const status = getCampaignStatus(channels, results);
+  const status = getCampaignStatus(campaignChannels, results);
   const attemptMetadata = {
     ...priorMeta,
     auto_publish: autoMode || priorMeta.auto_publish === true,
@@ -312,7 +375,7 @@ async function handlePublish(request: NextRequest, payload: Record<string, unkno
   const persistence = persistenceError
     ? { success: false, error: "Social outcomes were collected, but campaign logging failed. Reconcile provider posts before retrying." }
     : { success: true, campaignId, status };
-  const socialSuccess = channels.every((channel) => results[channel]?.success);
+  const socialSuccess = campaignChannels.length > 0 && campaignChannels.every((channel) => results[channel]?.success === true);
   return NextResponse.json({
     success: socialSuccess,
     campaignId,
@@ -322,16 +385,67 @@ async function handlePublish(request: NextRequest, payload: Record<string, unkno
     product: { id: String(product.id), title: product.title_en || product.title_ar, price: Number(product.price) },
     imageUrl,
     destination: buyUrl,
-    results: channels.map((channel) => ({ channel, ...results[channel] })),
-    publishing: { success: channels.some((channel) => results[channel]?.success), allEnabledSucceeded: socialSuccess },
+    results: campaignChannels.map((channel) => ({ channel, ...results[channel] })),
+    publishing: { success: campaignChannels.some((channel) => results[channel]?.success === true), allEnabledSucceeded: socialSuccess },
     persistence,
   }, { status: persistenceError ? 502 : 200 });
+}
+
+async function handleRequest(request: NextRequest, payload: Record<string, unknown>) {
+  const autoMode = request.nextUrl.searchParams.get("auto") === "true" || payload.auto === true;
+  const dryRun = request.nextUrl.searchParams.get("dry_run") === "true" || payload.dryRun === true;
+  const supabase = getSupabase();
+  if (!autoMode || dryRun) return handlePublish(request, payload, supabase);
+
+  const { claimed, runDate, idempotencyKey } = await claimDailyProductPublishRun(supabase);
+  if (!claimed) {
+    return NextResponse.json({
+      success: true,
+      skipped: true,
+      publicationAttempted: false,
+      reason: "The daily publishing run was already claimed.",
+      idempotencyKey,
+    });
+  }
+
+  let response: NextResponse;
+  let outcome: "completed" | "failed" | "skipped";
+  try {
+    response = await handlePublish(request, payload, supabase);
+    const responseBody = await response.clone().json().catch(() => null) as { success?: unknown; status?: unknown } | null;
+    outcome = responseBody?.success === true
+      ? "completed"
+      : responseBody?.status === "skipped" ? "skipped" : "failed";
+  } catch (error) {
+    const { error: persistError } = await supabase.from("product_publish_daily_runs")
+      .update({ status: "failed", completed_at: new Date().toISOString(), result: { outcome: "failed" } })
+      .eq("run_date", runDate)
+      .eq("idempotency_key", idempotencyKey);
+    if (persistError) throw new Error("Daily publishing failed and its outcome could not be recorded.");
+    throw error;
+  }
+  const { error: persistError } = await supabase.from("product_publish_daily_runs")
+    .update({
+      status: outcome,
+      completed_at: new Date().toISOString(),
+      result: { http_status: response.status, outcome },
+    })
+    .eq("run_date", runDate)
+    .eq("idempotency_key", idempotencyKey);
+  if (persistError) {
+    return NextResponse.json({
+      success: false,
+      error: "The daily outcome could not be recorded. Reconcile campaign results before any manual retry.",
+      idempotencyKey,
+    }, { status: 502 });
+  }
+  return response;
 }
 
 export async function GET(request: NextRequest) {
   if (!isCronBearerAuthorized(request)) return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
   try {
-    return await handlePublish(request, {});
+    return await handleRequest(request, {});
   } catch (error) {
     return NextResponse.json({ success: false, error: safeError(error instanceof Error ? error.message : undefined) }, { status: 500 });
   }
@@ -342,7 +456,7 @@ export async function POST(request: NextRequest) {
   try {
     const payload = await request.json();
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) return NextResponse.json({ success: false, error: "Invalid JSON request body." }, { status: 400 });
-    return await handlePublish(request, payload as Record<string, unknown>);
+    return await handleRequest(request, payload as Record<string, unknown>);
   } catch (error) {
     return NextResponse.json({ success: false, error: safeError(error instanceof Error ? error.message : undefined) }, { status: 500 });
   }

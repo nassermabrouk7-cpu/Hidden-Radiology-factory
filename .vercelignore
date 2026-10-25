@@ -14,6 +14,8 @@ env_temp.txt
 .repair-backups/
 /.repair-backups
 /.repair-backups/**
+.meta-token-report.backup.md
+dsh-session-session-7de29cb0-1df2-421e-810c-246f696206ba.zip
 Auto-Fix-From-Vercel.js
 Auto-Publisher-INSIDE-PROJECT.js
 fix*.js
