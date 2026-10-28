@@ -189,7 +189,6 @@ async function findRetryableCampaign(
 async function loadValidProducts(supabase: ReturnType<typeof getSupabase>): Promise<Array<{ product: Product; imageUrl: string }>> {
   const { data, error } = await supabase.from("products")
     .select("id, title_ar, title_en, description_ar, description_en, price, category, cover_url")
-    .eq("is_active", true)
     .limit(50);
   if (error) throw new Error("Could not load active products.");
   const valid: Array<{ product: Product; imageUrl: string }> = [];

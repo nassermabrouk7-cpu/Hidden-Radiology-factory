@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/meta-token-health",
+      "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/publish-all?auto=true",
+      "schedule": "0 7 * * *"
+    }
+  ]
+}

@@ -6,8 +6,11 @@ export function isCronBearerAuthorized(request: Request): boolean {
   const authorization = request.headers.get("authorization");
   if (!secret || secret.length < 32 || !authorization) return false;
 
+  const normalized = authorization.trim();
+  if (!normalized.startsWith("Bearer ")) return false;
+
   const expected = Buffer.from(`Bearer ${secret}`);
-  const actual = Buffer.from(authorization);
+  const actual = Buffer.from(normalized);
   return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
 
@@ -21,4 +24,10 @@ export function isMarketingItemPublishAuthorized(
   autoPublish = process.env.MARKETING_AUTO_PUBLISH,
 ): boolean {
   return autoPublish === "true" && status === "approved";
+}
+
+export function getGeneratedMarketingItemStatus(
+  autoPublish = process.env.MARKETING_AUTO_PUBLISH,
+): "approved" | "queued" {
+  return autoPublish === "true" ? "approved" : "queued";
 }

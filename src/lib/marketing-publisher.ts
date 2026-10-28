@@ -5,8 +5,11 @@ import { getFacebookCredentialError } from "@/lib/facebook-credentials";
 import { getMetaTokenHealth, isMetaTokenPublishAllowed } from "@/lib/meta-token-health";
 import { getInstagramBusinessAccountId } from "@/lib/meta-credentials";
 import { getMetaPublishCredentials } from "@/lib/meta-token-vault";
+import { publishToThreads } from "@/lib/channels/threads";
+import channelsConfig from "@/channels.config.json";
+import type { MarketingPlatform } from "@/lib/marketing-ai";
 
-type Platform = "instagram" | "facebook" | "linkedin";
+type Platform = MarketingPlatform;
 
 type MarketingContent = {
   id: string;
@@ -45,7 +48,7 @@ function sanitizeError(value: unknown, additionalSecrets: string[] = []): string
   if (typeof value !== "string" || !value) return "";
 
   let message = value;
-  for (const secret of [...additionalSecrets, process.env.METRICOOL_API_TOKEN, process.env.FACEBOOK_PAGE_ACCESS_TOKEN, process.env.INSTAGRAM_ACCESS_TOKEN, process.env.LINKEDIN_ACCESS_TOKEN, process.env.CRON_SECRET, process.env.SUPABASE_SERVICE_ROLE_KEY]) {
+  for (const secret of [...additionalSecrets, process.env.METRICOOL_API_TOKEN, process.env.FACEBOOK_PAGE_ACCESS_TOKEN, process.env.INSTAGRAM_ACCESS_TOKEN, process.env.LINKEDIN_ACCESS_TOKEN, process.env.TELEGRAM_BOT_TOKEN, process.env.THREADS_ACCESS_TOKEN, process.env.CRON_SECRET, process.env.SUPABASE_SERVICE_ROLE_KEY]) {
     if (secret) message = message.split(secret).join("[REDACTED]");
   }
   return message.slice(0, 500);
@@ -57,7 +60,7 @@ function isTrustedMediaUrl(value: string): boolean {
 
 function sanitizeText(value: string, additionalSecrets: string[] = []): string {
   let result = value;
-  for (const secret of [...additionalSecrets, process.env.METRICOOL_API_TOKEN, process.env.FACEBOOK_PAGE_ACCESS_TOKEN, process.env.INSTAGRAM_ACCESS_TOKEN, process.env.LINKEDIN_ACCESS_TOKEN, process.env.CRON_SECRET, process.env.SUPABASE_SERVICE_ROLE_KEY]) {
+  for (const secret of [...additionalSecrets, process.env.METRICOOL_API_TOKEN, process.env.FACEBOOK_PAGE_ACCESS_TOKEN, process.env.INSTAGRAM_ACCESS_TOKEN, process.env.LINKEDIN_ACCESS_TOKEN, process.env.TELEGRAM_BOT_TOKEN, process.env.THREADS_ACCESS_TOKEN, process.env.CRON_SECRET, process.env.SUPABASE_SERVICE_ROLE_KEY]) {
     if (secret) result = result.split(secret).join("[REDACTED]");
   }
   return result;
@@ -352,6 +355,45 @@ async function publishToLinkedIn(
   };
 }
 
+async function publishToTelegram(content: MarketingContent): Promise<PublishResult> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = channelsConfig.telegram.chat_id;
+  if (!channelsConfig.telegram.enabled || !token || !chatId) {
+    return { success: false, error: "Telegram publisher is not configured." };
+  }
+
+  const mediaUrl = typeof content.metadata?.media_url === "string" ? content.metadata.media_url : null;
+  if (mediaUrl && !isTrustedMediaUrl(mediaUrl)) {
+    return { success: false, error: "The media URL is not from the trusted public Supabase storage host." };
+  }
+
+  const text = buildPostText(content);
+  const replyMarkup = content.destination_url && /^https:\/\//i.test(content.destination_url)
+    ? { inline_keyboard: [[{ text: "Buy now", url: content.destination_url }]] }
+    : undefined;
+  const withPhoto = Boolean(mediaUrl);
+  const response = await fetch(`https://api.telegram.org/bot${token}/${withPhoto ? "sendPhoto" : "sendMessage"}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      ...(withPhoto ? { photo: mediaUrl, caption: text } : { text }),
+      ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+    }),
+    cache: "no-store",
+  });
+  const data = await response.json().catch(() => ({}));
+  const messageId = data?.result?.message_id;
+  if (!response.ok || data?.ok !== true || (typeof messageId !== "string" && typeof messageId !== "number")) {
+    return {
+      success: false,
+      response: sanitizeResponse(data, [token]),
+      error: sanitizeError(data?.description, [token]) || `Telegram API returned HTTP ${response.status}.`,
+    };
+  }
+  return { success: true, externalPostId: String(messageId), response: sanitizeResponse(data, [token]) };
+}
+
 /**
  * Remove anything that could accidentally expose credentials
  * before storing API responses in the database.
@@ -577,12 +619,29 @@ async function publishContent(
   }
 
   switch (content.platform) {
+    case "telegram":
+      return publishToTelegram(content);
     case "facebook":
       return publishToFacebook(content);
     case "instagram":
       return publishToInstagram(content);
     case "linkedin":
       return publishToLinkedIn(content);
+    case "threads": {
+      const userId = process.env.THREADS_USER_ID;
+      const accessToken = process.env.THREADS_ACCESS_TOKEN;
+      if (!channelsConfig.threads.enabled || !userId || !accessToken) {
+        return { success: false, error: "Threads publisher is not configured." };
+      }
+      const mediaUrl = typeof content.metadata?.media_url === "string" ? content.metadata.media_url : undefined;
+      if (mediaUrl && !isTrustedMediaUrl(mediaUrl)) {
+        return { success: false, error: "The media URL is not from the trusted public Supabase storage host." };
+      }
+      const result = await publishToThreads(userId, accessToken, { text: buildPostText(content), mediaUrl });
+      return result.success && result.postId
+        ? { success: true, externalPostId: result.postId }
+        : { success: false, error: sanitizeError(result.error, [accessToken]) };
+    }
     default:
       return {
         success: false,
@@ -626,8 +685,13 @@ export async function publishNextMarketingItem(): Promise<{
   if (staleLockError) throw new Error(`Failed to flag an ambiguous publishing attempt: ${staleLockError.message}`);
 
   const configuredPlatforms: Platform[] = isMetricoolEnabled()
-    ? (process.env.METRICOOL_PLATFORMS || "facebook,instagram,linkedin").split(",").map((value) => value.trim()).filter((value): value is Platform => ["facebook", "instagram", "linkedin"].includes(value as Platform))
-    : (["instagram", "facebook", "linkedin"] as Platform[]).filter((platform) => {
+    ? (process.env.METRICOOL_PLATFORMS || "facebook,instagram,linkedin").split(",").map((value) => value.trim()).filter((value): value is Platform =>
+        ["facebook", "instagram", "linkedin"].includes(value as Platform) &&
+        channelsConfig[value as "facebook" | "instagram" | "linkedin"].enabled)
+    : (["telegram", "instagram", "facebook", "linkedin", "threads"] as Platform[]).filter((platform) => {
+        if (!channelsConfig[platform].enabled) return false;
+        if (platform === "telegram") return Boolean(process.env.TELEGRAM_BOT_TOKEN && channelsConfig.telegram.chat_id);
+        if (platform === "threads") return Boolean(process.env.THREADS_USER_ID && process.env.THREADS_ACCESS_TOKEN);
         if (platform === "facebook") return metaCanPublish(facebookHealth.status) &&
           (process.env.META_TOKEN_VAULT_ENABLED === "true" || !getFacebookCredentialError(process.env.FACEBOOK_PAGE_ID, process.env.FACEBOOK_PAGE_ACCESS_TOKEN));
         if (platform === "instagram") return metaCanPublish(instagramHealth.status) &&
@@ -642,6 +706,7 @@ export async function publishNextMarketingItem(): Promise<{
 
   // Generated queue items require an explicit admin approval before any provider call.
   const eligibleStatuses = ["approved"];
+  if (safePlatforms.length === 0) return { processed: false };
 
   let query = supabase
     .from("marketing_content")

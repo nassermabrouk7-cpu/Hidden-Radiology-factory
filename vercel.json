@@ -7,6 +7,14 @@
     {
       "path": "/api/publish-all?auto=true",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/marketing/generate",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/marketing/cron",
+      "schedule": "0 9 * * *"
     }
   ]
 }

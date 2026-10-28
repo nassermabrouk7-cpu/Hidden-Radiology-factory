@@ -8,6 +8,13 @@ type Product = {
   cover_url?: string | null;
 };
 
+export type MarketingPlatform =
+  | "telegram"
+  | "instagram"
+  | "facebook"
+  | "linkedin"
+  | "threads";
+
 export type GeneratedCampaign = {
   name: string;
   objective: string;
@@ -16,7 +23,7 @@ export type GeneratedCampaign = {
   theme: string;
   language_strategy: string;
   content: Array<{
-    platform: "instagram" | "facebook" | "linkedin";
+    platform: MarketingPlatform;
     language: "ar" | "en";
     content_type:
       | "authority"
@@ -76,7 +83,7 @@ function parseJson<T>(text: string): T {
 
 export async function generateCampaign(
   product: Product,
-  platforms: Array<"instagram" | "facebook" | "linkedin"> = ["instagram", "facebook", "linkedin"]
+  platforms: MarketingPlatform[] = ["instagram", "facebook", "linkedin"]
 ): Promise<GeneratedCampaign> {
   const prompt = `
 You are the marketing strategist for Hidden Radiology, a professional radiology education brand.
@@ -84,14 +91,12 @@ You are the marketing strategist for Hidden Radiology, a professional radiology 
 Product:
 ${JSON.stringify(product)}
 
-Create exactly 12 social media content items.
+Create exactly ${platforms.length} social media content items: exactly one for each listed platform.
 
 Requirements:
-- 4 authority
-- 3 education
-- 2 trust
-- 3 product or conversion
-- Create 12 items total: 6 Arabic items with language "ar" and 6 English items with language "en". Each content object MUST use exactly one language value: "ar" or "en".
+- Include each listed platform exactly once.
+- Each content object MUST use exactly one language value: "ar" or "en". Choose the language that best fits the product and platform.
+- content_type must be one of: "authority", "education", "product", "trust", or "conversion".
 - Only use these configured platforms: ${platforms.join(", ")}.
 - Professional academic tone.
 - Educational and trustworthy.
@@ -99,6 +104,7 @@ Requirements:
 - Do not give patient-specific medical advice. Keep clinical topics general and link claims to the product only when supported by its title/category.
 - Present the product as an educational resource.
 - Keep every post self-contained and suitable for its chosen platform. Hashtags should match the post language.
+- Keep each post within its platform's practical text limit: Telegram 750 characters, Threads 350 characters, Instagram 2000 characters, LinkedIn 2500 characters, Facebook 2800 characters.
 - Return ONLY valid JSON.
 
 Return exactly this structure:
@@ -112,7 +118,7 @@ Return exactly this structure:
   "language_strategy": "ar+en",
   "content": [
     {
-      "platform": "instagram",
+      "platform": "${platforms[0] || "facebook"}",
       "language": "ar",
       "content_type": "authority",
       "title": "string",
@@ -124,7 +130,7 @@ Return exactly this structure:
   ]
 }
 
-The content array MUST contain exactly 12 objects.
+The content array MUST contain exactly ${platforms.length} objects, with each platform listed exactly once.
 `;
 
   const model = getModel();

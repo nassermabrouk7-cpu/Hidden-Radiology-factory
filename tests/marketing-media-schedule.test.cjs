@@ -17,6 +17,37 @@ test("a campaign generated before the cron keeps its same-day first slot", async
   assert.equal(getDailyMarketingSchedule(0, new Date("2026-10-11T05:59:00.000Z")), "2026-10-11T06:00:00.000Z");
 });
 
+test("daily marketing generation rotates through products with the oldest campaign first", async () => {
+  const { selectNextMarketingProduct } = await import("../src/lib/marketing-schedule.ts");
+  const products = Array.from({ length: 36 }, (_, index) => ({ id: `product-${index + 1}` }));
+  const campaigns = products.slice(0, 35).map((product, index) => ({
+    product_id: product.id,
+    created_at: new Date(Date.UTC(2026, 9, 1 + index)).toISOString(),
+  }));
+  assert.equal(selectNextMarketingProduct(products, campaigns).id, "product-36");
+  assert.equal(selectNextMarketingProduct(products, [
+    ...campaigns,
+    { product_id: "product-36", created_at: "2026-10-28T08:00:00.000Z" },
+  ]).id, "product-1");
+});
+
+test("daily marketing generation uses an atomic UTC date lock", async () => {
+  const { claimDailyMarketingGenerationRun } = await import("../src/lib/marketing-schedule.ts");
+  const claimedDates = new Set();
+  const store = {
+    rpc: async (name, args) => {
+      assert.equal(name, "claim_marketing_generation_daily_run");
+      assert.equal(args.p_run_date, "2026-10-28");
+      if (claimedDates.has(args.p_run_date)) return { data: false, error: null };
+      claimedDates.add(args.p_run_date);
+      return { data: true, error: null };
+    },
+  };
+  const now = new Date("2026-10-28T08:00:00.000Z");
+  assert.deepEqual(await claimDailyMarketingGenerationRun(store, now), { claimed: true, runDate: "2026-10-28" });
+  assert.deepEqual(await claimDailyMarketingGenerationRun(store, now), { claimed: false, runDate: "2026-10-28" });
+});
+
 test("admin cover preview accepts only HTTPS originals from the project's public covers bucket", async () => {
   const { getTrustedProductCoverUrl } = await import("../src/lib/marketing-media.ts");
   const supabase = "https://project.supabase.co";

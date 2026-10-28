@@ -65,31 +65,32 @@ export async function GET(request: NextRequest) {
     }
 
     /*
-     * Phase 2:
-     * Publish one item that is currently due.
-     *
-     * A publishing failure does not erase the generated campaign.
+     * Drain today's due posts; the configured platform limit is five.
+     * One failed channel does not block the other enabled channels.
      */
-    let publishResult: Awaited<
-      ReturnType<typeof publishNextMarketingItem>
-    >;
-
-    try {
-      publishResult = await publishNextMarketingItem();
-    } catch (error) {
-      publishResult = {
-        processed: false,
-        success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unknown publishing error",
-      };
+    const publishing: Array<Awaited<ReturnType<typeof publishNextMarketingItem>>> = [];
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        const result = await publishNextMarketingItem();
+        if (!result.processed) {
+          if (result.error) publishing.push(result);
+          break;
+        }
+        publishing.push(result);
+      } catch (error) {
+        publishing.push({
+          processed: false,
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown publishing error",
+        });
+        break;
+      }
     }
 
-    // Publishing stays deliberately gated by MARKETING_AUTO_PUBLISH. A disabled
-    // gate is an expected skip, while an actual failed publishing attempt is an error.
-    const publishingSucceeded = publishResult.success !== false;
+    const publishingSucceeded = publishing.every((result) =>
+      result.error === "Automatic social publishing is disabled." ||
+      result.success !== false
+    );
     const success = generateResponse.ok && publishingSucceeded;
 
     return NextResponse.json(
@@ -99,7 +100,11 @@ export async function GET(request: NextRequest) {
           status: generateResponse.status,
           result: generateResult,
         },
-        publishing: publishResult,
+        publishing: {
+          processed: publishing.some((result) => result.processed),
+          attempted: publishing.filter((result) => result.processed).length,
+          results: publishing,
+        },
       },
       {
         status: !generateResponse.ok

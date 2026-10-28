@@ -15,3 +15,10 @@ test("marketing job authorization is Bearer-only and rejects URL secrets", async
     headers: { authorization: "Bearer wrong" },
   })), false);
 });
+
+test("new campaign content requires review unless automatic publishing is explicitly enabled", async () => {
+  const { getGeneratedMarketingItemStatus } = await import("../src/lib/marketing-auth.ts");
+  assert.equal(getGeneratedMarketingItemStatus("false"), "queued");
+  assert.equal(getGeneratedMarketingItemStatus(undefined), "queued");
+  assert.equal(getGeneratedMarketingItemStatus("true"), "approved");
+});

@@ -107,7 +107,7 @@ export default function MarketingAdminPage() {
         </div>
 
         <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
-          <div><h1 className="text-3xl font-bold text-[#00E5FF]">محتوى الحملات الإعلانية</h1><p className="mt-2 text-slate-300">آخر 100 مادة إعلانية محفوظة. تبقى المنشورات معلقة حتى توافق عليها.</p></div>
+          <div><h1 className="text-3xl font-bold text-[#00E5FF]">محتوى الحملات الإعلانية</h1><p className="mt-2 text-slate-300">تُنشأ حملة يوميًا للمنتج التالي، بمادة واحدة لكل قناة مهيأة. تبقى المنشورات معلقة حتى توافق عليها.</p></div>
           <button onClick={() => void loadQueue()} disabled={busy} className="flex items-center gap-2 rounded border border-[#00E5FF]/40 px-4 py-2 text-[#00E5FF] disabled:opacity-50">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} تحديث
           </button>
@@ -124,7 +124,7 @@ export default function MarketingAdminPage() {
                 {item.scheduled_at && <time className="text-slate-400">{new Date(item.scheduled_at).toLocaleString(item.language === "ar" ? "ar-EG" : "en-US", { timeZone: "Africa/Cairo" })}</time>}
               </div>
               <h2 className="mb-2 text-xl font-bold">{item.title}</h2>
-              {item.platform === "instagram" && item.media_url && <Image src={item.media_url} alt="غلاف الكتاب الأصلي للمنشور" width={128} height={192} className="mb-4 h-48 w-32 rounded-lg border border-white/10 object-cover" />}
+              {item.media_url && <Image src={item.media_url} alt="غلاف الكتاب الأصلي للمنشور" width={128} height={192} className="mb-4 h-48 w-32 rounded-lg border border-white/10 object-cover" />}
               <p className="mb-2 font-semibold text-[#00E5FF]">{item.hook}</p>
               <p className="whitespace-pre-wrap leading-7 text-slate-200">{item.body}</p>
               <p className="mt-3 font-semibold">{item.cta}</p>

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { generateCampaign, type GeneratedCampaign } from "@/lib/marketing-ai";
-import { isMarketingJobAuthorized } from "@/lib/marketing-auth";
+import { generateCampaign, type GeneratedCampaign, type MarketingPlatform } from "@/lib/marketing-ai";
+import { getGeneratedMarketingItemStatus, isMarketingJobAuthorized } from "@/lib/marketing-auth";
 import { normalizeMarketingSiteUrl } from "@/lib/marketing-site";
-import { getDailyMarketingSchedule } from "@/lib/marketing-schedule";
+import { claimDailyMarketingGenerationRun, getDailyMarketingSchedule, selectNextMarketingProduct } from "@/lib/marketing-schedule";
+import channelsConfig from "@/channels.config.json";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,7 +12,7 @@ export const maxDuration = 60;
 
 type ProductRow = {
   id: string; title_ar: string; title_en: string; category: string; price: number;
-  language: string; cover_url: string | null; created_at: string;
+  language: string; cover_url: string | null; created_at: string; is_active: boolean;
 };
 type CampaignRow = {
   id: string; product_id: string; name: string; objective: string; audience: string;
@@ -25,15 +26,28 @@ type ContentRow = {
   status: string; metadata: Record<string, unknown>; created_at: string; updated_at: string;
 };
 type Table<Row> = { Row: Row; Insert: Partial<Row>; Update: Partial<Row>; Relationships: [] };
+type GenerationRunRow = {
+  run_date: string;
+  status: "running" | "completed" | "failed";
+  started_at: string;
+  completed_at: string | null;
+  result: Record<string, unknown>;
+};
 type MarketingDatabase = {
   public: {
     Tables: {
       products: Table<ProductRow>;
       marketing_campaigns: Table<CampaignRow>;
       marketing_content: Table<ContentRow>;
+      marketing_generation_daily_runs: Table<GenerationRunRow>;
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      claim_marketing_generation_daily_run: {
+        Args: { p_run_date: string };
+        Returns: boolean;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };
@@ -46,52 +60,82 @@ function getSupabase() {
   return createClient<MarketingDatabase>(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
-type Platform = "instagram" | "facebook" | "linkedin";
+function getConfiguredPlatforms(): MarketingPlatform[] {
+  const configured: MarketingPlatform[] = [];
+  if (channelsConfig.telegram.enabled && process.env.TELEGRAM_BOT_TOKEN && channelsConfig.telegram.chat_id) {
+    configured.push("telegram");
+  }
+  if (channelsConfig.facebook.enabled &&
+      (process.env.META_TOKEN_VAULT_ENABLED === "true" ||
+        (process.env.FACEBOOK_PAGE_ID && process.env.FACEBOOK_PAGE_ACCESS_TOKEN))) {
+    configured.push("facebook");
+  }
+  if (channelsConfig.instagram.enabled &&
+      (process.env.META_TOKEN_VAULT_ENABLED === "true" ||
+        ((process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID || process.env.INSTAGRAM_USER_ID) &&
+          process.env.INSTAGRAM_ACCESS_TOKEN))) {
+    configured.push("instagram");
+  }
+  if (channelsConfig.linkedin.enabled && process.env.LINKEDIN_ACCESS_TOKEN && process.env.LINKEDIN_AUTHOR_URN) {
+    configured.push("linkedin");
+  }
+  if (channelsConfig.threads.enabled && process.env.THREADS_USER_ID && process.env.THREADS_ACCESS_TOKEN) {
+    configured.push("threads");
+  }
 
-function getConfiguredPlatforms(): Platform[] {
   if (process.env.MARKETING_ALLOW_PAID_METRICOOL_API === "true" && process.env.METRICOOL_API_TOKEN) {
     return (process.env.METRICOOL_PLATFORMS || "facebook,instagram")
       .split(",").map((value) => value.trim())
-      .filter((value): value is Platform => ["instagram", "facebook", "linkedin"].includes(value));
+      .filter((value): value is MarketingPlatform =>
+        ["instagram", "facebook", "linkedin"].includes(value) && configured.includes(value as MarketingPlatform));
   }
-  const platforms: Platform[] = [];
-  if (process.env.FACEBOOK_PAGE_ID && process.env.FACEBOOK_PAGE_ACCESS_TOKEN) platforms.push("facebook");
-  if (process.env.INSTAGRAM_USER_ID && process.env.INSTAGRAM_ACCESS_TOKEN) platforms.push("instagram");
-  if (process.env.LINKEDIN_ACCESS_TOKEN && process.env.LINKEDIN_AUTHOR_URN) platforms.push("linkedin");
-  return platforms;
+  return configured;
 }
 
-function validateCampaign(value: GeneratedCampaign) {
-  if (!value || typeof value !== "object" || !Array.isArray(value.content) || value.content.length !== 12) {
-    throw new Error("The generated campaign must contain exactly 12 content items");
+function validateCampaign(value: GeneratedCampaign, platforms: MarketingPlatform[]) {
+  if (!value || typeof value !== "object" || !Array.isArray(value.content) || value.content.length !== platforms.length) {
+    throw new Error(`The generated campaign must contain exactly ${platforms.length} content items`);
   }
 
-  const languages = { ar: 0, en: 0 };
+  const seenPlatforms = new Set<string>();
   for (const item of value.content) {
-    if (!item || !["instagram", "facebook", "linkedin"].includes(item.platform)) throw new Error("Campaign contains an unsupported platform");
+    if (!item || !platforms.includes(item.platform)) throw new Error("Campaign contains an unsupported platform");
+    if (seenPlatforms.has(item.platform)) throw new Error("Campaign must contain exactly one post per platform");
+    seenPlatforms.add(item.platform);
     if (item.language !== "ar" && item.language !== "en") throw new Error("Campaign contains an unsupported language");
-    languages[item.language] += 1;
     if (!["authority", "education", "product", "trust", "conversion"].includes(item.content_type)) throw new Error("Campaign contains an unsupported content type");
     for (const field of ["title", "hook", "body", "cta"] as const) {
       if (typeof item[field] !== "string" || !item[field].trim()) throw new Error(`Campaign is missing ${field}`);
       if (item[field].length > 3000) throw new Error(`Campaign ${field} exceeds the allowed length`);
     }
+    const maxLength = item.platform === "telegram" ? 750
+      : item.platform === "threads" ? 350
+        : item.platform === "instagram" ? 2000
+          : 2800;
     if (!Array.isArray(item.hashtags)) item.hashtags = [];
     item.hashtags = item.hashtags.filter((tag) => typeof tag === "string" && tag.trim()).slice(0, 12);
+    const composedText = [
+      item.title,
+      item.hook,
+      item.body,
+      item.cta,
+      ...item.hashtags,
+    ].join("\n\n");
+    if (composedText.length > maxLength) {
+      throw new Error(`Campaign content exceeds the ${item.platform} text limit`);
+    }
   }
-  if (languages.ar !== 6 || languages.en !== 6) throw new Error("Campaign must contain six Arabic and six English posts");
+  if (seenPlatforms.size !== platforms.length) throw new Error("Campaign is missing a configured platform");
 }
 
-export async function POST(request: NextRequest) {
-  if (!isMarketingJobAuthorized(request)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+async function generateForRequest(request: NextRequest, allowQueueBacklog: boolean) {
   try {
     const supabase = getSupabase();
     const url = new URL(request.url);
     const force = url.searchParams.get("force") === "true";
 
     // Do not add a campaign while any prior content still needs review, publishing, or reconciliation.
-    if (!force) {
+    if (!force && !allowQueueBacklog) {
       const { data: pending, error } = await supabase
         .from("marketing_content")
         .select("id")
@@ -118,6 +162,7 @@ export async function POST(request: NextRequest) {
     const { data: products, error: productError } = await supabase
       .from("products")
       .select("id, title_ar, title_en, category, price, language, cover_url")
+      .eq("is_active", true)
       .order("created_at", { ascending: true })
       .limit(200);
     if (productError) throw new Error("Could not load products for campaign generation");
@@ -128,21 +173,13 @@ export async function POST(request: NextRequest) {
       const { data: campaigns, error } = await supabase.from("marketing_campaigns")
         .select("product_id, created_at").order("created_at", { ascending: false }).limit(500);
       if (error) throw new Error("Could not choose a product for the next campaign");
-      const latestByProduct = new Map<string, string>();
-      for (const campaign of campaigns || []) {
-        const id = String(campaign.product_id);
-        if (!latestByProduct.has(id)) latestByProduct.set(id, campaign.created_at);
-      }
-      product = [...products].sort((a: { id: string }, b: { id: string }) => {
-        const aLast = latestByProduct.get(String(a.id)) || "";
-        const bLast = latestByProduct.get(String(b.id)) || "";
-        return aLast.localeCompare(bLast);
-      })[0];
+      product = selectNextMarketingProduct(products, campaigns || []);
     }
+    if (!product) return NextResponse.json({ error: "No product is available for campaign generation" }, { status: 404 });
 
     const campaignPlatforms = availablePlatforms;
     const campaign = await generateCampaign(product, campaignPlatforms);
-    validateCampaign(campaign);
+    validateCampaign(campaign, campaignPlatforms);
     if (campaign.content.some((item) => !campaignPlatforms.includes(item.platform))) {
       throw new Error("Campaign includes a platform that is not configured");
     }
@@ -160,7 +197,7 @@ export async function POST(request: NextRequest) {
     }).select("id").single();
     if (campaignError || !insertedCampaign) throw new Error("Could not save the generated campaign");
 
-    // One future 06:00 UTC slot per day matches the once-daily Vercel cron.
+    // Queue one post for each configured platform in the same next-daily slot.
     const scheduleStart = new Date();
     const items = campaign.content.map((item, index) => {
       return {
@@ -175,8 +212,8 @@ export async function POST(request: NextRequest) {
         cta: item.cta,
         hashtags: item.hashtags,
         destination_url: `${siteUrl}/library`,
-        scheduled_at: getDailyMarketingSchedule(index, scheduleStart),
-        status: "queued",
+        scheduled_at: getDailyMarketingSchedule(0, scheduleStart),
+        status: getGeneratedMarketingItemStatus(),
         metadata: { sequence: index + 1, media_url: product.cover_url || null },
       };
     });
@@ -189,14 +226,59 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      status: "queued",
+      status: getGeneratedMarketingItemStatus(),
       campaignId: insertedCampaign.id,
       product: { id: String(product.id), title_ar: product.title_ar, title_en: product.title_en },
       contentCount: items.length,
-      message: "A 12-post campaign was generated and scheduled, one post per day.",
+      platforms: campaignPlatforms,
+      message: process.env.MARKETING_AUTO_PUBLISH === "true"
+        ? "One post per configured platform was generated and scheduled for automatic publishing."
+        : "One post per configured platform was generated and queued for admin approval.",
     });
   } catch (error) {
     console.error("Marketing generation failed:", error);
     return NextResponse.json({ error: error instanceof Error ? error.message : "Marketing generation failed" }, { status: 500 });
+  }
+}
+
+export async function POST(request: NextRequest) {
+  if (!isMarketingJobAuthorized(request)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  return generateForRequest(request, false);
+}
+
+export async function GET(request: NextRequest) {
+  if (!isMarketingJobAuthorized(request)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  try {
+    const supabase = getSupabase();
+    const { claimed, runDate } = await claimDailyMarketingGenerationRun(supabase);
+    if (!claimed) {
+      return NextResponse.json({
+        success: true,
+        skipped: true,
+        status: "already_generated",
+        runDate,
+      });
+    }
+
+    const response = await generateForRequest(request, true);
+    const result = await response.clone().json().catch(() => ({})) as Record<string, unknown>;
+    const completed = response.status < 400 && result.success === true;
+    const { error } = await supabase.from("marketing_generation_daily_runs").update({
+      status: completed ? "completed" : "failed",
+      completed_at: new Date().toISOString(),
+      result: { status: response.status, campaignId: result.campaignId || null },
+    }).eq("run_date", runDate);
+    if (error) {
+      console.error("Marketing generation run status update failed:", error.message);
+      return NextResponse.json({ success: false, error: "The daily generation outcome could not be recorded." }, { status: 502 });
+    }
+    return response;
+  } catch (error) {
+    console.error("Daily marketing generation failed:", error);
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : "Daily marketing generation failed",
+    }, { status: 500 });
   }
 }
