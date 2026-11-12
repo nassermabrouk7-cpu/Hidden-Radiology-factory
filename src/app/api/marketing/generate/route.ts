@@ -162,7 +162,6 @@ async function generateForRequest(request: NextRequest, allowQueueBacklog: boole
     const { data: products, error: productError } = await supabase
       .from("products")
       .select("id, title_ar, title_en, category, price, language, cover_url")
-      .eq("is_active", true)
       .order("created_at", { ascending: true })
       .limit(200);
     if (productError) throw new Error("Could not load products for campaign generation");

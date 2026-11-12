@@ -705,7 +705,7 @@ export async function publishNextMarketingItem(): Promise<{
   );
 
   // Generated queue items require an explicit admin approval before any provider call.
-  const eligibleStatuses = ["approved"];
+  const eligibleStatuses = ["approved", "scheduled"];
   if (safePlatforms.length === 0) return { processed: false };
 
   let query = supabase
