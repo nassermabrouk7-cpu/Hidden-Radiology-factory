@@ -102,9 +102,9 @@ test("Vercel schedules product publishing, campaign generation, and daily social
   );
   assert.deepEqual(config.crons, [
     { path: "/api/cron/meta-token-health", schedule: "0 5 * * *" },
+    { path: "/api/marketing/generate", schedule: "0 6 * * *" },
     { path: "/api/publish-all?auto=true", schedule: "0 7 * * *" },
-    { path: "/api/marketing/generate", schedule: "0 8 * * *" },
-    { path: "/api/marketing/cron", schedule: "0 9 * * *" },
+    { path: "/api/marketing/cron", schedule: "0 8 * * *" },
   ]);
   assert.equal(
     config.crons.some(({ path }) => path === "/api/marketing/publish"),

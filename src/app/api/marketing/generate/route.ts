@@ -12,7 +12,7 @@ export const maxDuration = 60;
 
 type ProductRow = {
   id: string; title_ar: string; title_en: string; category: string; price: number;
-  language: string; cover_url: string | null; created_at: string; is_active: boolean;
+  language: string; cover_url: string | null; created_at: string;
 };
 type CampaignRow = {
   id: string; product_id: string; name: string; objective: string; audience: string;

@@ -181,7 +181,6 @@ export async function POST(request: NextRequest) {
     const { data: product, error: productError } = await supabase.from("products")
       .select("id, title_ar, title_en, description_ar, description_en, price, cover_url")
       .eq("id", productId)
-      .eq("is_active", true)
       .maybeSingle();
     if (productError) throw new Error("Could not load the requested product.");
     if (!product) return NextResponse.json({ success: false, error: "Product not found." }, { status: 404 });

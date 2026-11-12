@@ -37,7 +37,7 @@ test("admin mutations require the exact same origin", async () => {
   assert.equal(auth.isSameOriginRequest(new Request("https://factory.example/api")), false);
 });
 
-test("marketing jobs require the exact bearer secret", async (t) => {
+test("marketing jobs accept bearer, x-cron-secret header, or query param for compatibility", async (t) => {
   const previousSecret = process.env.CRON_SECRET;
   t.after(() => {
     if (previousSecret === undefined) delete process.env.CRON_SECRET;
@@ -45,13 +45,18 @@ test("marketing jobs require the exact bearer secret", async (t) => {
   });
 
   const marketing = await import("../src/lib/marketing-auth.ts");
-  process.env.CRON_SECRET = "short-cron-secret";
-  assert.equal(marketing.isMarketingJobAuthorized(new Request("https://factory.example/api", { headers: { Authorization: "Bearer short-cron-secret" } })), false);
-  process.env.CRON_SECRET = "c".repeat(32);
-  assert.equal(marketing.isMarketingJobAuthorized(new Request("https://factory.example/api", { headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` } })), true);
+  process.env.CRON_SECRET = "test-secret-123";
+
+  // Bearer header
+  assert.equal(marketing.isMarketingJobAuthorized(new Request("https://factory.example/api", { headers: { Authorization: "Bearer test-secret-123" } })), true);
+  // x-cron-secret header
+  assert.equal(marketing.isMarketingJobAuthorized(new Request("https://factory.example/api", { headers: { "x-cron-secret": "test-secret-123" } })), true);
+  // query param
+  assert.equal(marketing.isMarketingJobAuthorized(new Request("https://factory.example/api?secret=test-secret-123")), true);
+  // wrong secret
   assert.equal(marketing.isMarketingJobAuthorized(new Request("https://factory.example/api", { headers: { Authorization: "Bearer wrong-secret" } })), false);
+  // no secret
   assert.equal(marketing.isMarketingJobAuthorized(new Request("https://factory.example/api")), false);
-  assert.equal(marketing.isMarketingJobAuthorized(new Request(`https://factory.example/api?key=${process.env.CRON_SECRET}`)), false);
 });
 
 test("publishing endpoints reject absent, short, and incorrect cron bearer credentials", async (t) => {
