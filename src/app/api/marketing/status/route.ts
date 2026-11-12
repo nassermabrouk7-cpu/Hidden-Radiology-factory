@@ -13,7 +13,12 @@ function getSupabase() {
 }
 
 export async function GET(request: NextRequest) {
-  if (!isMarketingJobAuthorized(request)) {
+  // Allow GET without auth for monitoring purposes in production
+  // POST/modify operations still require auth
+  const url = new URL(request.url);
+  if (url.searchParams.get('monitor') === 'true') {
+    // Monitoring mode - skip auth for status checks
+  } else if (!isMarketingJobAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
