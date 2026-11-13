@@ -178,14 +178,26 @@ export async function POST(request: NextRequest) {
 
   try {
     const supabase = getSupabase();
-    const { data: product, error: productError } = await supabase.from("products")
-      .select("id, title_ar, title_en, description_ar, description_en, price, cover_url")
+    // FIX: use select("*") + normalize - products table has "description" not "description_ar/description_en"
+    // and may have "title" not "title_ar/title_en" - old select caused 42703 Could not load
+    const { data: productRaw, error: productError } = await supabase.from("products")
+      .select("*")
       .eq("id", productId)
       .maybeSingle();
     if (productError) throw new Error("Could not load the requested product.");
-    if (!product) return NextResponse.json({ success: false, error: "Product not found." }, { status: 404 });
+    if (!productRaw) return NextResponse.json({ success: false, error: "Product not found." }, { status: 404 });
 
-    const invalid = validateProduct(product as Product);
+    const product = {
+      id: productRaw.id,
+      title_ar: productRaw.title_ar || productRaw.title || productRaw.name || null,
+      title_en: productRaw.title_en || productRaw.title || productRaw.name || null,
+      description_ar: productRaw.description_ar || productRaw.description || productRaw.description_en || null,
+      description_en: productRaw.description_en || productRaw.description || productRaw.description_ar || null,
+      price: productRaw.price,
+      cover_url: productRaw.cover_url || productRaw.image_url || productRaw.cover || null,
+    } as Product;
+
+    const invalid = validateProduct(product);
     if (invalid) return NextResponse.json({ success: false, error: invalid }, { status: 422 });
     const imageUrl = getTrustedProductCoverUrl(product.cover_url, process.env.NEXT_PUBLIC_SUPABASE_URL);
     if (!imageUrl) return NextResponse.json({ success: false, error: "Product cover URL is invalid." }, { status: 422 });
@@ -265,7 +277,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Could not create the publishing record; no publisher was called." }, { status: 500 });
     }
 
-    const outcome = await publishSelected(channel, product as Product, imageUrl, buyUrl);
+    const outcome = await publishSelected(channel, product, imageUrl, buyUrl);
     const publishedAt = outcome.success ? new Date().toISOString() : null;
     const resultRecord = {
       success: outcome.success,
