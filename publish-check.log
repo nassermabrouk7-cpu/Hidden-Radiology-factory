@@ -1,0 +1,15 @@
+2026-11-13T07:02:37  Telegram: no token variable found in .env
+2026-11-13T07:02:37  Meta: no token variable found in .env
+2026-11-13T07:07:58  Site: [SENSITIVE]
+2026-11-13T07:07:58    var: CRON_SECRET (len=11)
+2026-11-13T07:07:58    var: FACEBOOK_PAGE_ACCESS_TOKEN (len=11)
+2026-11-13T07:07:58    var: FACEBOOK_PAGE_ID (len=11)
+2026-11-13T07:07:58    var: INSTAGRAM_ACCESS_TOKEN (len=11)
+2026-11-13T07:07:58    var: INSTAGRAM_BUSINESS_ACCOUNT_ID (len=11)
+2026-11-13T07:07:58    var: MARKETING_AUTO_PUBLISH (len=5)
+2026-11-13T07:07:58    var: META_APP_ID (len=11)
+2026-11-13T07:07:58    var: META_APP_SECRET (len=11)
+2026-11-13T07:07:58    var: TELEGRAM_BOT_TOKEN (len=11)
+2026-11-13T07:07:58  Telegram FAIL (TELEGRAM_BOT_TOKEN): ???? ?????? ?????? ?????: (404) ?? ??? ?????? ????.
+2026-11-13T07:07:59  Meta/IG FAIL (INSTAGRAM_ACCESS_TOKEN): {"error":{"message":"Invalid OAuth access token - Cannot parse access token","type":"OAuthException","code":190,"fbtrace_id":"AafMr7O58FHm4aROWFrS_Gf"}}
+2026-11-13T07:07:59  Meta/IG FAIL (FACEBOOK_PAGE_ACCESS_TOKEN): {"error":{"message":"Invalid OAuth access token - Cannot parse access token","type":"OAuthException","code":190,"fbtrace_id":"Ak9XzBLEMnlSE8z7ImLYmQX"}}
