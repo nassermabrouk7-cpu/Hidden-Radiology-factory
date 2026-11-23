@@ -44,6 +44,20 @@ export async function publishToInstagram(
 
     const containerId = containerResult.id;
 
+    // Wait for container to be ready
+    for (let attempt = 0; attempt < 10; attempt++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const statusRes = await fetch(`https://graph.facebook.com/${containerId}?fields=status_code&access_token=${encodeURIComponent(accessToken)}`);
+      const statusJson = await statusRes.json().catch(() => ({}));
+      if (statusJson.status_code === "FINISHED") break;
+      if (statusJson.status_code === "ERROR") {
+        return { success: false, error: `Container failed: ${statusJson.error?.message || "Image processing failed"}`.slice(0, 300) };
+      }
+      if (attempt === 9) {
+        return { success: false, error: "Container timed out - image not ready after 30s" };
+      }
+    }
+
     // Step 2: Publish the container
     const publishUrl = `https://graph.facebook.com/${encodeURIComponent(instagramBusinessAccountId)}/media_publish`;
 

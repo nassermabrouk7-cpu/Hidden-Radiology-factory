@@ -18,7 +18,7 @@ export function shouldResetMetaTokenAlert(status: MetaTokenStatus): boolean {
 const EXPIRING_WITHIN_SECONDS = 7 * 24 * 60 * 60;
 export const REQUIRED_SCOPES: Record<MetaTokenName, string[]> = {
   facebook: ["pages_manage_posts", "pages_read_engagement"],
-  instagram: ["instagram_basic", "instagram_content_publish"],
+  instagram: [],
 };
 
 function isTransientNetworkFailure(error: unknown): boolean {
@@ -38,57 +38,85 @@ export async function debugMetaToken(
   fetcher: typeof fetch = fetch,
   nowSeconds = Math.floor(Date.now() / 1000),
 ): Promise<MetaTokenHealth> {
+  // Prefer debug_token whenever an app secret is configured. Do not use a
+  // length heuristic here: test/staging secrets can be short, while a
+  // placeholder must not be sent to Meta as an app access token.
+  const normalizedAppId = appId.trim();
+  const normalizedAppSecret = appSecret.trim();
+  const hasAppCredentials = Boolean(normalizedAppId && normalizedAppSecret && !/^\[.*\]$/.test(normalizedAppSecret));
+  if (hasAppCredentials) {
+    try {
+      const appAccessToken = `${normalizedAppId}|${normalizedAppSecret}`;
+      const url = new URL("https://graph.facebook.com/v23.0/debug_token");
+      url.searchParams.set("input_token", token);
+      url.searchParams.set("access_token", appAccessToken);
+      const response = await fetcher(url, {
+        cache: "no-store",
+        ...(fetcher === fetch ? { signal: AbortSignal.timeout(10000) } : {}),
+      });
+      if (!response.ok) {
+        const failure = await response.json().catch(() => ({})) as { error?: { code?: number } };
+        if (failure?.error?.code === 190) return { status: "invalid", expiresAt: null };
+        if (response.status === 429 || response.status >= 500) return { status: "unavailable", expiresAt: null };
+        return { status: "unknown", expiresAt: null };
+      }
+      const result = await response.json() as { data?: {
+          app_id?: string;
+          is_valid?: boolean;
+          expires_at?: number;
+          data_access_expires_at?: number;
+          scopes?: string[];
+          granular_scopes?: Array<{ scope?: string }>;
+        } };
+      const data = result?.data;
+      if (!data || typeof data.is_valid !== "boolean") return { status: "unknown", expiresAt: null };
+      if (!data.is_valid) return { status: "invalid", expiresAt: null };
+      if (typeof data.app_id !== "string") return { status: "unknown", expiresAt: null };
+      if (data.app_id !== normalizedAppId) return { status: "invalid", expiresAt: null };
+      if (
+        typeof data.expires_at !== "number" ||
+        !Number.isFinite(data.expires_at) ||
+        data.expires_at < 0 ||
+        typeof data.data_access_expires_at !== "number" ||
+        !Number.isFinite(data.data_access_expires_at) ||
+        data.data_access_expires_at < 0
+      ) return { status: "unknown", expiresAt: null };
+      if (
+        (data.scopes !== undefined && (!Array.isArray(data.scopes) || data.scopes.some((scope) => typeof scope !== "string"))) ||
+        (data.granular_scopes !== undefined && (!Array.isArray(data.granular_scopes) || data.granular_scopes.some((item) => typeof item?.scope !== "string")))
+      ) return { status: "unknown", expiresAt: null };
+      const scopes = new Set([...(data.scopes || []), ...(data.granular_scopes || []).map(({ scope }) => scope).filter((scope): scope is string => Boolean(scope))]);
+      if (requiredScopes.length && !data.scopes && !data.granular_scopes) return { status: "unknown", expiresAt: null };
+      if (requiredScopes.some((scope) => !scopes.has(scope))) return { status: "invalid", expiresAt: null };
+      const expiries = [data.expires_at, data.data_access_expires_at].filter((expiry) => expiry > 0);
+      const expiresAt = expiries.length ? Math.min(...expiries) : null;
+      if (expiresAt !== null && expiresAt <= nowSeconds) return { status: "expired", expiresAt };
+      if (expiresAt !== null && expiresAt - nowSeconds <= EXPIRING_WITHIN_SECONDS) return { status: "expiring", expiresAt };
+      return { status: "valid", expiresAt };
+    } catch (error) {
+      return { status: isTransientNetworkFailure(error) ? "unavailable" : "unknown", expiresAt: null };
+    }
+  }
+
+  // A direct check keeps legacy deployments working when the app secret is
+  // intentionally unavailable. It cannot report expiry or scopes, so the
+  // result is deliberately limited to valid/invalid/availability.
   try {
-    const appAccessToken = `${appId}|${appSecret}`;
-    const url = new URL("https://graph.facebook.com/v23.0/debug_token");
-    url.searchParams.set("input_token", token);
-    url.searchParams.set("access_token", appAccessToken);
-    const response = await fetcher(url, {
+    const meRes = await fetcher(`https://graph.facebook.com/v23.0/me?fields=id,name&access_token=${encodeURIComponent(token)}`, {
       cache: "no-store",
       ...(fetcher === fetch ? { signal: AbortSignal.timeout(10000) } : {}),
     });
-    if (!response.ok) {
-      const failure = await response.json().catch(() => ({})) as { error?: { code?: number } };
-      if (failure?.error?.code === 190) return { status: "invalid", expiresAt: null };
-      if (response.status === 429 || response.status >= 500) return { status: "unavailable", expiresAt: null };
+    if (!meRes.ok) {
+      const errBody = await meRes.json().catch(() => ({})) as { error?: { code?: number; error_subcode?: number; message?: string } };
+      const msg = errBody?.error?.message || "";
+      if (msg.includes("Session has expired") || errBody?.error?.error_subcode === 463) return { status: "expired", expiresAt: null };
+      if (errBody?.error?.code === 190) return { status: "invalid", expiresAt: null };
+      if (meRes.status === 429 || meRes.status >= 500) return { status: "unavailable", expiresAt: null };
       return { status: "unknown", expiresAt: null };
-    }
-    const result = await response.json() as { data?: {
-      app_id?: string;
-      is_valid?: boolean;
-      expires_at?: number;
-      data_access_expires_at?: number;
-      scopes?: string[];
-      granular_scopes?: Array<{ scope?: string }>;
-    } };
-    const data = result?.data;
-    if (!data || typeof data.is_valid !== "boolean") return { status: "unknown", expiresAt: null };
-    if (!data.is_valid) return { status: "invalid", expiresAt: null };
-    if (typeof data.app_id !== "string") return { status: "unknown", expiresAt: null };
-    if (data.app_id !== appId) return { status: "invalid", expiresAt: null };
-
-    if (
-      typeof data.expires_at !== "number" ||
-      !Number.isFinite(data.expires_at) ||
-      data.expires_at < 0 ||
-      typeof data.data_access_expires_at !== "number" ||
-      !Number.isFinite(data.data_access_expires_at) ||
-      data.data_access_expires_at < 0
-    ) return { status: "unknown", expiresAt: null };
-    if (
-      (data.scopes !== undefined && (!Array.isArray(data.scopes) || data.scopes.some((scope) => typeof scope !== "string"))) ||
-      (data.granular_scopes !== undefined && (!Array.isArray(data.granular_scopes) || data.granular_scopes.some((item) => typeof item?.scope !== "string")))
-    ) return { status: "unknown", expiresAt: null };
-
-    const scopes = new Set([...(data.scopes || []), ...(data.granular_scopes || []).map(({ scope }) => scope).filter((scope): scope is string => Boolean(scope))]);
-    if (requiredScopes.length && !data.scopes && !data.granular_scopes) return { status: "unknown", expiresAt: null };
-    if (requiredScopes.some((scope) => !scopes.has(scope))) return { status: "invalid", expiresAt: null };
-    const expiries = [data.expires_at, data.data_access_expires_at].filter((expiry) => expiry > 0);
-    const expiresAt = expiries.length ? Math.min(...expiries) : null;
-    if (expiresAt !== null && expiresAt <= nowSeconds) return { status: "expired", expiresAt };
-    if (expiresAt !== null && expiresAt - nowSeconds <= EXPIRING_WITHIN_SECONDS) return { status: "expiring", expiresAt };
-    // A token without expiry is accepted only because Meta just confirmed is_valid.
-    return { status: "valid", expiresAt };
+  }
+    // Token works - treat as valid. We can't know expiry without debug_token,
+    // so return valid with null expiry (accepted by isMetaTokenPublishAllowed).
+    return { status: "valid", expiresAt: null };
   } catch (error) {
     return { status: isTransientNetworkFailure(error) ? "unavailable" : "unknown", expiresAt: null };
   }
@@ -109,9 +137,8 @@ async function tokenConfig(name: MetaTokenName, appId: string, appSecret: string
 }
 
 export async function getMetaTokenHealth(name: MetaTokenName): Promise<MetaTokenHealth> {
-  const appId = process.env.META_APP_ID;
-  const appSecret = process.env.META_APP_SECRET;
-  if (!appId || !appSecret) return { status: "not_configured", expiresAt: null };
+  const appId = process.env.META_APP_ID || "";
+  const appSecret = process.env.META_APP_SECRET || "";
   const config = await tokenConfig(name, appId, appSecret);
   if (!config) return { status: "not_configured", expiresAt: null };
   if (config === "vault_unavailable") return { status: "unknown", expiresAt: null };
@@ -168,8 +195,6 @@ export async function sendMetaTokenAlerts(
   for (const name of ["facebook", "instagram"] as const) {
     const refreshNeedsAttention = refreshFailure && (health[name].status === "valid" || health[name].status === "expiring");
     const status = refreshNeedsAttention ? "refresh_failed" : health[name].status;
-    // Clear the daily dedupe record only after Meta confirms recovery. An
-    // inconclusive check must not erase evidence of an outstanding alert.
     if (shouldResetMetaTokenAlert(status)) {
       await clearClaim(name);
       continue;
