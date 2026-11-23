@@ -700,7 +700,7 @@ export async function publishNextMarketingItem(): Promise<{
       });
   const safePlatforms = configuredPlatforms.filter((platform) =>
     platform === "facebook" ? metaCanPublish(facebookHealth.status)
-      : platform === "instagram" ? metaCanPublish(instagramHealth.status)
+      : platform === "instagram" ? metaCanPublish(facebookHealth.status)
         : true,
   );
 
