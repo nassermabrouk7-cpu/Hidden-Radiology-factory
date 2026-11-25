@@ -7,6 +7,18 @@ hr_secret.txt
 cron.txt
 env_temp.txt
 
+# Source-only and archival files do not belong in the production build upload.
+/books/
+/public/covers/
+/backup-cron-20261025-151034/
+/docs/
+/scripts/
+/tests/
+*.md
+*.log
+*.ps1
+.tmp-*
+
 # Local Vercel metadata
 .vercel/
 

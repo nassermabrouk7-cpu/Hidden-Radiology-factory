@@ -23,7 +23,7 @@ export default async function Page(){
     const supabase = createClient(supabaseUrl, serviceRoleKey);
     const { data } = await supabase
       .from('campaigns')
-      .select('*')
+      .select('id, book_id, created_at, hook, price')
       .order('created_at', { ascending: false })
       .limit(50);
     campaigns = (data ?? []) as CampaignRow[];

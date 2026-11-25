@@ -9,10 +9,10 @@ import "./globals.css";
 // إعداد الخطوط
 const cairo = localFont({
   src: [
-    { path: "../../public/fonts/Cairo-Regular.ttf", weight: "400" },
-    { path: "../../public/fonts/static/Cairo-SemiBold.ttf", weight: "600" },
-    { path: "../../public/fonts/Cairo-Bold.ttf", weight: "700" },
-    { path: "../../public/fonts/static/Cairo-Black.ttf", weight: "900" },
+    { path: "../fonts/Cairo-Regular.ttf", weight: "400" },
+    { path: "../fonts/Cairo-SemiBold.ttf", weight: "600" },
+    { path: "../fonts/Cairo-Bold.ttf", weight: "700" },
+    { path: "../fonts/Cairo-Black.ttf", weight: "900" },
   ],
   variable: "--font-cairo",
   display: "swap",

@@ -10,7 +10,6 @@
     "lint": "eslint src/app src/components src/context src/lib"
   },
   "dependencies": {
-    "@fontsource/tajawal": "^5.3.0",
     "@react-pdf/renderer": "^4.9.0",
     "@supabase/supabase-js": "^2.117.2",
     "@vercel/og": "^1.0.3",
