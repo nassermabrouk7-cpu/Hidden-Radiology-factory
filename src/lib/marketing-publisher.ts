@@ -694,13 +694,13 @@ export async function publishNextMarketingItem(): Promise<{
         if (platform === "threads") return Boolean(process.env.THREADS_USER_ID && process.env.THREADS_ACCESS_TOKEN);
         if (platform === "facebook") return metaCanPublish(facebookHealth.status) &&
           (process.env.META_TOKEN_VAULT_ENABLED === "true" || !getFacebookCredentialError(process.env.FACEBOOK_PAGE_ID, process.env.FACEBOOK_PAGE_ACCESS_TOKEN));
-        if (platform === "instagram") return metaCanPublish(facebookHealth.status) &&
-          (process.env.META_TOKEN_VAULT_ENABLED === "true" || Boolean(getInstagramBusinessAccountId() && process.env.FACEBOOK_PAGE_ACCESS_TOKEN));
+        if (platform === "instagram") return metaCanPublish(instagramHealth.status) &&
+          (process.env.META_TOKEN_VAULT_ENABLED === "true" || Boolean(getInstagramBusinessAccountId() && process.env.INSTAGRAM_ACCESS_TOKEN));
         return Boolean(process.env.LINKEDIN_ACCESS_TOKEN && process.env.LINKEDIN_AUTHOR_URN);
       });
   const safePlatforms = configuredPlatforms.filter((platform) =>
     platform === "facebook" ? metaCanPublish(facebookHealth.status)
-      : platform === "instagram" ? metaCanPublish(facebookHealth.status)
+      : platform === "instagram" ? metaCanPublish(instagramHealth.status)
         : true,
   );
 
